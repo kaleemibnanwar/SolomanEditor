@@ -58,32 +58,42 @@ function muxerFor(protocol) {
 function buildArgs({ url, protocol, source, loop, transcode }) {
   const args = ["-hide_banner", "-loglevel", "info"];
 
-  if (source.kind === "timeline") {
-    // The renderer streams a fragmented mp4/webm over IPC into stdin. No `-re`:
-    // the chunks arrive in real time already, and the container timestamps pace
-    // the RTMP push.
-    const fmt = source.format === "webm" ? "matroska" : "mp4";
-    args.push("-f", fmt, "-i", "pipe:0");
-    const copySafe = source.copySafe !== false && !transcode;
-    if (copySafe) {
-      args.push("-c:v", "copy", "-c:a", "copy");
+  // Live ingest (YouTube, Twitch, RTMP generally) only accepts H.264 + AAC, so
+  // the DEFAULT is to transcode. Stream-copy is the fast path for a source the
+  // caller already knows is H.264/AAC.
+  const addEncoder = (copyVideo, copyAudio) => {
+    if (copyVideo) {
+      args.push("-c:v", "copy");
     } else {
       args.push("-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", "60", "-pix_fmt", "yuv420p");
-      args.push("-c:a", "aac", "-b:a", "160k");
     }
+    if (copyAudio) {
+      args.push("-c:a", "copy");
+    } else {
+      args.push("-c:a", "aac", "-ar", "44100", "-b:a", "160k");
+    }
+  };
+
+  if (source.kind === "timeline") {
+    // The renderer streams a live WebM/Matroska (or, as a fallback, fragmented
+    // mp4) over IPC into stdin. No `-re`: the chunks arrive in real time already.
+    const fmt = source.format === "webm" ? "matroska" : "mp4";
+    args.push("-f", fmt, "-i", "pipe:0");
+    // The live capture is ALWAYS re-encoded to H.264/AAC: stream-copying out of a
+    // pipe is unreliable, and YouTube accepts only H.264 anyway.
+    addEncoder(false, false);
   } else {
     if (loop) args.push("-stream_loop", "-1");
     args.push("-re", "-i", source.value);
-
-    if (transcode) {
-      // Guaranteed H.264 + AAC, so any source plays on any platform. Slower.
-      args.push("-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", "60", "-pix_fmt", "yuv420p");
-      args.push("-c:a", "aac", "-b:a", "160k");
-    } else {
-      // Stream-copy the video, transcode only the audio to AAC for compatibility.
-      args.push("-c:v", "copy", "-c:a", "aac", "-b:a", "160k");
-    }
+    // Audio is always transcoded to AAC (sources may be PCM/Opus); video copy
+    // only when the caller is confident it is already H.264.
+    addEncoder(!transcode, false);
   }
+
+  // A bounded muxing queue is the classic fix for "Too many packets buffered for
+  // output stream" — the most common RTMP/YouTube failure under `-c copy`.
+  args.push("-max_muxing_queue_size", "1024");
+  if (protocol === "rtmp" || protocol === "rtmps") args.push("-rtmp_live", "live");
 
   const muxer = muxerFor(protocol);
   if (muxer) args.push("-f", muxer);
@@ -176,6 +186,7 @@ class BroadcastSession {
     this.child = child;
 
     let buffer = "";
+    const tail = [];
     child.stderr.on("data", (chunk) => {
       buffer += chunk.toString();
       let index;
@@ -183,6 +194,10 @@ class BroadcastSession {
         const line = buffer.slice(0, index).trim();
         buffer = buffer.slice(index + 1);
         if (this.child !== child) return; // a newer session has replaced this one
+        if (line) {
+          tail.push(line);
+          if (tail.length > 12) tail.shift();
+        }
         if (line.includes("time=")) {
           const progress = parseProgress(line);
           this.state = { ...this.state, ...progress, error: null };
@@ -204,11 +219,14 @@ class BroadcastSession {
     child.on("error", (error) => finish(error.message));
     child.on("exit", (code) => {
       if (this.child !== child) return;
-      if (code !== 0 && code !== null) finish(`ffmpeg exited with code ${code}.`);
-      else finish(null);
+      if (code !== 0 && code !== null) {
+        const detail = tail.slice(-4).join(" · ");
+        finish(`ffmpeg exited with code ${code}${detail ? ` — ${detail}` : ""}.`);
+      } else finish(null);
     });
 
     this.emit();
+    return this.status();
   }
 
   /** Write a MediaRecorder chunk to ffmpeg's stdin (timeline broadcasts). */
@@ -224,7 +242,7 @@ class BroadcastSession {
 
   stop() {
     const child = this.child;
-    if (!child) return;
+    if (!child) return this.status();
     this.child = null;
     child.on("error", () => {});
     try {
@@ -235,6 +253,7 @@ class BroadcastSession {
     child.kill("SIGKILL");
     this.state = { ...this.state, running: false, error: null };
     this.emit();
+    return this.status();
   }
 }
 

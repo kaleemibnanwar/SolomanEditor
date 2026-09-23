@@ -59,10 +59,13 @@ export function exportSupport() {
  * (VP8/VP9 + Opus) must be transcoded on the way out (`copySafe: false`).
  */
 export function preferredStreamMime(): { mime: string; copySafe: boolean } | null {
-  const mp4 = firstSupported(MP4_CANDIDATES);
-  if (mp4) return { mime: mp4, copySafe: true };
+  // Prefer WebM (Matroska) for LIVE streaming: it demuxes reliably from a pipe,
+  // and the caller transcodes it to H.264/AAC for RTMP. Fragmented MP4 from
+  // stdin is the flakier path, kept only as a fallback.
   const webm = firstSupported(WEBM_CANDIDATES);
   if (webm) return { mime: webm, copySafe: false };
+  const mp4 = firstSupported(MP4_CANDIDATES);
+  if (mp4) return { mime: mp4, copySafe: true };
   return null;
 }
 

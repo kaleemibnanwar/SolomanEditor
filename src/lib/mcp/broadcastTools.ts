@@ -199,7 +199,7 @@ export const BROADCAST_TOOLS: ToolDefinition[] = [
         url: str("An http(s) URL to the video to stream (ignored when timeline is true)."),
         timeline: bool("Broadcast the composed timeline instead of a file/URL. Defaults to false."),
         loop: bool("Keep looping until stopped. Defaults to false for files, true for the timeline."),
-        transcode: bool("Re-encode to H.264/AAC. Defaults to false (stream-copy when possible)."),
+        transcode: bool("Re-encode to H.264/AAC. Defaults to true — live ingest (YouTube) rejects other codecs."),
         hidden_tracks: strList("Track ids to drop from a timeline broadcast — see list_timeline_rows."),
       },
       ["config"],
@@ -237,14 +237,14 @@ export const BROADCAST_TOOLS: ToolDefinition[] = [
       if (!file && !url) return toolError("start_broadcast needs a `file` path, a `url`, or timeline: true.");
 
       const source = file ? { kind: "file" as const, value: file } : { kind: "url" as const, value: url! };
-      const status = await bridge.start({
+      const status = (await bridge.start({
         url: ingestUrl(config),
         protocol: config.protocol,
         source,
         loop: argBool(args, "loop") ?? false,
-        transcode: argBool(args, "transcode") ?? false,
+        transcode: argBool(args, "transcode") ?? true,
         label: config.name,
-      });
+      })) ?? NO_BROADCAST_STATUS;
 
       return textResult(
         [
@@ -266,7 +266,7 @@ export const BROADCAST_TOOLS: ToolDefinition[] = [
       await stopTimelinePush();
       const bridge = broadcastBridge();
       if (!bridge) return toolError("Broadcasting is not available here.");
-      const status = await bridge.stop();
+      const status = (await bridge.stop()) ?? NO_BROADCAST_STATUS;
       return textResult("Broadcast stopped.", { ok: true, running: status.running, ...status });
     },
   },

@@ -435,6 +435,11 @@ function createWindow() {
   const revealTimer = setTimeout(reveal, SHOW_FALLBACK_MS);
   win.once("closed", () => clearTimeout(revealTimer));
 
+  // A crashed renderer or a closed window must not leave ffmpeg pushing — it was
+  // spawned on the renderer's behalf, so the main process stops it here.
+  win.webContents.on("render-process-gone", () => broadcaster.stop());
+  win.on("closed", () => broadcaster.stop());
+
   // A `target="_blank"` in the stock panel should not open a bare Electron
   // window with no address bar.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -569,6 +574,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   void mcpServer.stop();
+  broadcaster.stop();
 });
 
 app.on("window-all-closed", () => {

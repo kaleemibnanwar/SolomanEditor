@@ -62,5 +62,19 @@ export async function startTimelinePush(
 export async function stopTimelinePush(): Promise<void> {
   const active = engine;
   engine = null;
-  active?.stop();
+  try {
+    active?.stop();
+  } catch (error) {
+    console.error("[octo-cut] timeline stop failed:", error);
+  }
+  // Stop ffmpeg directly too — the engine's onStopped does this, but a failure in
+  // the capture cleanup must never leave the push running.
+  const bridge = broadcastBridge();
+  if (bridge) {
+    try {
+      await bridge.stop();
+    } catch {
+      /* ignore — the push is already gone */
+    }
+  }
 }

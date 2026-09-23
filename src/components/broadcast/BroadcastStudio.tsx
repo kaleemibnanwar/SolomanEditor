@@ -65,7 +65,7 @@ export default function BroadcastStudio() {
   const [sourceKind, setSourceKind] = useState<SourceKind>("file");
   const [sourceValue, setSourceValue] = useState("");
   const [loop, setLoop] = useState(true);
-  const [transcode, setTranscode] = useState(false);
+  const [transcode, setTranscode] = useState(true);
   const [status, setStatus] = useState<BroadcastStatus>(NO_BROADCAST_STATUS);
   const [ffmpeg, setFfmpeg] = useState<{ available: boolean; version: string | null }>({ available: false, version: null });
   const [busy, setBusy] = useState(false);
@@ -162,7 +162,7 @@ export default function BroadcastStudio() {
     setBusy(true);
     try {
       await stopTimelinePush();
-      if (bridge) setStatus(await bridge.stop());
+      if (bridge) setStatus((await bridge.stop()) ?? NO_BROADCAST_STATUS);
     } finally {
       setBusy(false);
     }
@@ -387,10 +387,16 @@ function BroadcastHeader({
           <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} className="accent-[#6366f1]" />
           Loop
         </label>
-        <label className="flex items-center gap-1.5 text-[11px] text-km-dim" title="Re-encode to H.264/AAC">
-          <input type="checkbox" checked={transcode} onChange={(e) => setTranscode(e.target.checked)} className="accent-[#6366f1]" />
-          Transcode
-        </label>
+        {sourceKind !== "timeline" ? (
+          <label className="flex items-center gap-1.5 text-[11px] text-km-dim" title="Re-encode to H.264/AAC">
+            <input type="checkbox" checked={transcode} onChange={(e) => setTranscode(e.target.checked)} className="accent-[#6366f1]" />
+            Transcode
+          </label>
+        ) : (
+          <span className="flex items-center gap-1 text-[10px] text-km-faint" title="The live timeline is always encoded to H.264/AAC for ingest">
+            H.264/AAC
+          </span>
+        )}
         <span className={cn("flex items-center gap-1 text-[10px]", ffmpeg.available ? "text-km-faint" : "text-amber-400")}>
           <Wifi className="h-3 w-3" />
           {ffmpeg.available ? "" : "ffmpeg"}

@@ -59,30 +59,35 @@ export function startTimelineBroadcast(options: TimelineBroadcastOptions): Timel
   const cleanup = () => {
     if (stopped) return;
     stopped = true;
-    if (raf) cancelAnimationFrame(raf);
-    for (const voice of voices) {
-      try {
-        voice.source.stop();
-        voice.source.disconnect();
-        voice.gain.disconnect();
-      } catch {
-        /* already stopped */
+    try {
+      if (raf) cancelAnimationFrame(raf);
+      for (const voice of voices) {
+        try {
+          voice.source.stop();
+          voice.source.disconnect();
+          voice.gain.disconnect();
+        } catch {
+          /* already stopped */
+        }
       }
-    }
-    voices = [];
-    if (recorder && recorder.state !== "inactive") {
-      try {
-        recorder.stop();
-      } catch {
-        /* ignore */
+      voices = [];
+      if (recorder && recorder.state !== "inactive") {
+        try {
+          recorder.stop();
+        } catch {
+          /* ignore */
+        }
       }
+      canvasStream?.getTracks().forEach((track) => track.stop());
+      audioDest?.disconnect();
+      setOutputMuted(wasMuted);
+      endMediaCapture();
+      editor().setCurrentTime(Math.min(restoreTime, projectDuration(editor().project)));
+    } finally {
+      // `onStopped` stops ffmpeg — it must run even if a cleanup step threw,
+      // otherwise the push keeps going after the renderer stops feeding it.
+      options.onStopped?.();
     }
-    canvasStream?.getTracks().forEach((track) => track.stop());
-    audioDest?.disconnect();
-    setOutputMuted(wasMuted);
-    endMediaCapture();
-    editor().setCurrentTime(Math.min(restoreTime, projectDuration(editor().project)));
-    options.onStopped?.();
   };
 
   const snapshot = editorStore.getState();
@@ -133,6 +138,9 @@ export function startTimelineBroadcast(options: TimelineBroadcastOptions): Timel
       cleanup();
       return;
     }
+
+    // A stop during the (async) audio setup must not let the capture start anyway.
+    if (stopped) return;
 
     canvasStream = frame.captureStream(fps);
     const tracks = [...canvasStream.getVideoTracks()];
