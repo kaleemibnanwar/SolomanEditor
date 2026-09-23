@@ -1,0 +1,69 @@
+# Packaging for the desktop build.
+#
+# The renderer is a normal Vite bundle, so nothing here compiles anything — it
+# only decides what travels inside the app and how each platform wraps it. The
+# three entries under `files` are the whole runtime: the built editor, the main
+# process plus its HTTP transport and preload script, and the manifest Electron
+# reads to find the entry point.
+#
+# Icons live in `build/` (the `buildResources` dir below) under electron-builder's
+# own conventional names — `icon.icns`, `icon.ico`, `icon.png` — and need no
+# further config: each platform picks up its own file automatically. The rest of
+# the metadata a platform installer needs (author, homepage, description,
+# license) comes from `package.json`, not from here.
+
+appId: com.octocut.app
+productName: Octo Cut
+copyright: Copyright © Octo Cut
+
+directories:
+  output: release
+  buildResources: build
+
+# `node_modules` is deliberately absent: the editor has no runtime dependency
+# the bundler did not already inline, and shipping it would multiply the
+# installer for nothing. `npmRebuild` is off for the same reason — there are no
+# native modules to rebuild.
+npmRebuild: false
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+  - "!**/*.map"
+  - "!**/.DS_Store"
+
+# Sources and project files are noise in a distributed app; these are the ones
+# electron-builder would otherwise pull in from the defaults.
+extraMetadata:
+  main: electron/main.cjs
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.video
+  darkModeSupport: true
+
+win:
+  target:
+    - nsis
+    - portable
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: AudioVideo
+  synopsis: A non-destructive video editor that runs on your desktop
+  # Electron identifies its own window to the desktop environment by `desktopName`
+  # (WM_CLASS, set in package.json — it's a root metadata field, not a `linux:`
+  # one); without it a window manager can't tie the running app back to its
+  # taskbar/dock entry. This is what makes electron-builder actually name the
+  # installed .desktop file to match, rather than falling back to productName.
+  syncDesktopName: true
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: Octo Cut

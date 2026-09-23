@@ -19,6 +19,26 @@ export default {
     },
     extend: {
       colors: {
+        // KineMaster-inspired editor palette
+        km: {
+          bg: "#0a0a0e",
+          panel: "#141419",
+          panel2: "#1b1b22",
+          raised: "#23232c",
+          border: "#2a2a35",
+          track: "#0e0e12",
+          text: "#ecedf3",
+          dim: "#9898a9",
+          faint: "#62626f",
+          accent: "#6366f1",
+          accent2: "#4f46e5",
+          video: "#6366f1",
+          image: "#22c55e",
+          title: "#f5a524",
+          audio: "#a855f7",
+          sticker: "#ec4899",
+          effect: "#14b8a6",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

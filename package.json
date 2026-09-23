@@ -1,17 +1,32 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "octo-cut",
   "version": "0.0.0",
+  "description": "A non-destructive video editor that runs on your desktop",
+  "homepage": "https://octocut.app",
+  "desktopName": "octo-cut.desktop",
+  "author": {
+    "name": "kaleemibnanwar",
+    "email": "kaleemibnanwar@gmail.com"
+  },
+  "license": "UNLICENSED",
   "private": true,
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "concurrently -k -n vite,electron -c cyan,magenta \"vite\" \"wait-on http://localhost:8080 && node electron/launch.cjs . --dev\"",
+    "electron:start": "pnpm build && node electron/launch.cjs .",
+    "electron:build:dir": "pnpm build && electron-builder --dir",
+    "electron:build": "pnpm build && electron-builder",
+    "electron:build:linux": "pnpm build && electron-builder --linux deb --x64"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
+    "@huggingface/transformers": "^3.8.1",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-aspect-ratio": "^1.1.0",
@@ -46,6 +61,7 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.3.0",
     "input-otp": "^1.2.4",
+    "kokoro-js": "^1.2.1",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
     "react": "^19.2.3",
@@ -62,7 +78,6 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@octopus-studio-sh/react-vite-component-tagger": "^0.9.0",
     "@eslint/js": "^9.9.0",
     "@tailwindcss/typography": "^0.5.15",
     "@types/node": "^22.5.5",
@@ -70,6 +85,9 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.3.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^10.0.5",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
@@ -78,6 +96,7 @@
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "wait-on": "^9.1.0"
   }
 }
