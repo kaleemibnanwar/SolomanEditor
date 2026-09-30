@@ -1,0 +1,45 @@
+# Fast validation on every push and pull request: type-check, build the
+# renderer, and lint. Kept on a single Linux runner — none of these steps are
+# platform-specific, and the release workflow already covers the 3-OS matrix.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm exec tsc --noEmit -p tsconfig.app.json
+
+      - name: Build renderer
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint
