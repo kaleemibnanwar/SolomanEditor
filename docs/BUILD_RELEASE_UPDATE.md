@@ -110,7 +110,8 @@ The updater only exists in a **packaged** build (`app.isPackaged`), so `pnpm dev
 | `GITHUB_TOKEN` | mirror to the source repo | auto-provided |
 | `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD` | macOS code signing (base64 `.p12` + password) | optional — unsigned without them |
 | `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` | Windows code signing (base64 `.pfx` + password) | optional — unsigned without them |
-| `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` | macOS notarization | optional — Gatekeeper will warn without them |
+| `APPLE_API_KEY_BASE64` / `APPLE_API_KEY_ID` / `APPLE_API_ISSUER` | macOS notarization (App Store Connect API key, `.p8` stored base64) | optional — Gatekeeper will warn without them |
+| `APPLE_TEAM_ID` | team id, used by signing + notarization | optional |
 
 Without the optional signing secrets the workflow still produces working installers;
 they're just unsigned (the OS warns on first launch).
@@ -155,17 +156,20 @@ base64**, because CI has no access to your keychain.
    gh secret set MAC_CSC_LINK --repo kaleemibnanwar/octocut-source --body "$(base64 -w0 DeveloperIDApplication.p12)"
    gh secret set MAC_CSC_KEY_PASSWORD --repo kaleemibnanwar/octocut-source --body "<p12 password>"
    ```
-5. Notarization credentials:
+5. Notarization credentials — an **App Store Connect API key** (team-scoped, no
+   expiry, the automation-friendly path). Create it under **App Store Connect →
+   Users and Access → Integrations → API Keys** (Developer access) and download the
+   `.p8`. The workflow reads it base64 so the multiline key survives `GITHUB_ENV`:
    ```bash
-   gh secret set APPLE_ID --repo kaleemibnanwar/octocut-source --body "you@example.com"
-   gh secret set APPLE_APP_SPECIFIC_PASSWORD --repo kaleemibnanwar/octocut-source --body "xxxx-xxxx-xxxx-xxxx"
-   gh secret set APPLE_TEAM_ID --repo kaleemibnanwar/octocut-source --body "ABCDE12345"
+   gh secret set APPLE_API_KEY_BASE64 --repo kaleemibnanwar/octocut-source --body "$(base64 -w0 AuthKey_XXXX.p8)"
+   gh secret set APPLE_API_KEY_ID --repo kaleemibnanwar/octocut-source --body "KEYID"       # e.g. CRPZB6A7XX
+   gh secret set APPLE_API_ISSUER --repo kaleemibnanwar/octocut-source --body "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+   gh secret set APPLE_TEAM_ID --repo kaleemibnanwar/octocut-source --body "BR8AR3UC53"
    ```
-   - `APPLE_ID`: your Apple ID. `APPLE_APP_SPECIFIC_PASSWORD`: an **app-specific
-     password** from appleid.apple.com. `APPLE_TEAM_ID`: the 10-char team id under
-     developer.apple.com/account → Membership.
-   - Alternative to Apple ID: an App Store Connect API key (`APPLE_API_KEY`,
-     `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`) — electron-builder supports both.
+   The workflow decodes `APPLE_API_KEY_BASE64` to a file and points `APPLE_API_KEY`
+   at it, so `notarytool` gets a path. (An Apple ID + app-specific password works
+   too — `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` — but the API key is what's wired
+   here.)
 
 ### Windows (code-signing cert)
 
