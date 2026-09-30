@@ -22,6 +22,16 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build (use one platform when recovering a failed job)
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - macos
+          - windows
 
 permissions:
   contents: write
@@ -37,7 +47,7 @@ jobs:
       # Linux installers are built and uploaded from the release workstation;
       # Actions is reserved for the two platforms that require native runners.
       matrix:
-        os: [windows-latest, macos-latest]
+        os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || inputs.platform == 'windows' && '["windows-latest"]' || '["windows-latest","macos-latest"]') }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -122,7 +132,7 @@ jobs:
           if [ -z "$TAG" ] || [ "$TAG" = "main" ]; then
             TAG="v$(node -p "require('./package.json').version")"
           fi
-          # `create` is idempotent-ish: three OS runners race to create the same
+          # `create` is idempotent-ish: the native OS runners race to create the same
           # release, so ignore the "already exists" failure and just upload.
           gh release create "$TAG" --repo "${{ github.repository }}" \
             --title "Octo Cut $TAG" --notes "Release $TAG" || true

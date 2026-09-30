@@ -14,7 +14,7 @@ Three subsystems cooperate to ship a release:
 | Bundler | Vite (`vite.config.ts`) | Compile the React renderer to `dist/` |
 | Packager | **electron-builder** (`electron-builder.yml`) | Produce per-platform installers + the update feed |
 | Updater | **electron-updater** (`electron/main.cjs`) | Check, download, and install updates from GitHub Releases |
-| Distributor | GitHub Actions (`.github/workflows/release.yml`) | Build on 3 OSes, publish artifacts, host the feed |
+| Distributor | GitHub Actions (`.github/workflows/release.yml`) | Build macOS/Windows artifacts, publish them, host the feed |
 
 The renderer is a plain Vite bundle; electron-builder only decides what travels
 inside the app and how each platform wraps it. Native dependencies (`onnxruntime-node`,
@@ -72,7 +72,7 @@ The updater only exists in a **packaged** build (`app.isPackaged`), so `pnpm dev
 
 | Platform | Artifacts in the release | Auto-update? |
 |---|---|---|
-| macOS | `*.zip` (required for auto-update) + `.dmg` + `.pkg` | ✅ |
+| macOS | `*.zip` (required for auto-update) + `.dmg` | ✅ |
 | Windows | `*Setup.exe` + `*.blockmap` + `latest.yml` | ✅ |
 | Linux | `.deb`, `AppImage` | ❌ manual install |
 
@@ -203,13 +203,12 @@ electron-builder builds + signs the .app
         ▼
 notarytool notarization + staple
         ▼
-Release .zip (auto-update) + .dmg + .pkg on kaleemibnanwar/octocut
+Release .zip (auto-update) + .dmg on kaleemibnanwar/octocut
 ```
 
-The `.pkg` is signed with the same Developer ID Application identity; if you want a
-separate **Developer ID Installer** identity for the `.pkg`, set `mac.identity` in
-`electron-builder.yml` — otherwise the default is used and Apple still accepts it for
-notarization.
+The `.dmg` and `.zip` cover normal distribution and notarization. A `.pkg` is not
+built because it requires a separate **Developer ID Installer** certificate; the
+Developer ID Application certificate used for the app cannot sign that container.
 
 ## 8. Troubleshooting
 
