@@ -34,8 +34,10 @@ jobs:
     name: Build on ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # Linux installers are built and uploaded from the release workstation;
+      # Actions is reserved for the two platforms that require native runners.
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
