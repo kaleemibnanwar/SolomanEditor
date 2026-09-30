@@ -1,0 +1,106 @@
+# Build, sign (when credentials are present) and publish a release, then mirror
+# it to the source repo. The updater (`electron-updater` in `electron/main.cjs`)
+# reads the `latest*.yml` feed from the PUBLIC repo, so that is where binaries
+# must land; the source repo gets a copy for archive/backup.
+#
+# Triggered by pushing a `v*` tag (or "Run workflow"). The version comes from
+# `package.json`; bump it *and* tag it together, e.g. `pnpm version 0.1.0` then
+# `git push --tags`.
+#
+# Secrets:
+#   PUBLIC_REPO_TOKEN  (required)  PAT with `contents: write` on kaleemibnanwar/octocut
+#   CSC_LINK / CSC_KEY_PASSWORD     (optional) macOS Developer ID + Windows code-signing cert
+#   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID  (optional) macOS notarization
+# Without the optional secrets the build still succeeds, just unsigned.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # electron-builder's Squirrel/NSIS outputs are sensitive to CRLF, and the
+      # guide's "works locally but not on CI" bugs trace to autocrlf. Force it off.
+      - name: Normalize line endings
+        run: git config --global core.autocrlf false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build renderer
+        run: pnpm build
+
+      - name: Build, sign and publish installers
+        env:
+          # Points electron-builder's GitHub publisher at the PUBLIC release repo.
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          # Code signing + notarization. Empty when absent → unsigned build.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm exec electron-builder --publish always
+
+  mirror:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download the public release assets
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          mkdir -p dist-release
+          gh release download "v${VERSION}" \
+            --repo kaleemibnanwar/octocut \
+            --dir dist-release \
+            --clobber
+
+      - name: Mirror the release to the source repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          gh release create "v${VERSION}" \
+            --repo kaleemibnanwar/octocut-source \
+            --title "Octo Cut ${VERSION}" \
+            --notes "Release ${VERSION}. Download page: https://github.com/kaleemibnanwar/octocut/releases/tag/v${VERSION}" \
+            || echo "Release already exists; uploading assets"
+          gh release upload "v${VERSION}" dist-release/* \
+            --repo kaleemibnanwar/octocut-source \
+            --clobber

@@ -18,14 +18,20 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { getAllSettings, setSetting, settingsPersist, type SettingKey } from "@/lib/settings";
+import { Switch } from "@/components/ui/switch";
+import { getAllSettings, getSetting, setSetting, settingsPersist } from "@/lib/settings";
 import { validateStockKey, type StockKeyStatus, type StockKeyVerdict } from "@/lib/stock";
+import { setTelemetryEnabled } from "@/lib/telemetry";
 
 const inputClass =
   "h-7 rounded border-km-border bg-km-track px-2 text-[12px] text-km-text placeholder:text-km-faint focus-visible:ring-1 focus-visible:ring-km-accent";
 
+/** The two stock-provider keys this dialog edits. `telemetryEnabled` is a SettingKey
+ *  too, but it lives in its own toggle here, not in the key-fields state below. */
+type StockKey = "pixabayApiKey" | "pexelsApiKey";
+
 /** Keys that identify a provider account, and so can be checked against one. */
-const CHECKABLE: SettingKey[] = ["pixabayApiKey", "pexelsApiKey"];
+const CHECKABLE: StockKey[] = ["pixabayApiKey", "pexelsApiKey"];
 
 /** Long enough that a key isn't probed on every keystroke, short enough to feel live. */
 const CHECK_DEBOUNCE_MS = 700;
@@ -96,14 +102,16 @@ function Field({
 }
 
 export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [values, setValues] = useState<Record<SettingKey, string>>({
+  const [values, setValues] = useState<Record<StockKey, string>>({
     pixabayApiKey: "",
     pexelsApiKey: "",
   });
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [verdicts, setVerdicts] = useState<Partial<Record<SettingKey, KeyedVerdict>>>({});
-  const [checking, setChecking] = useState<Partial<Record<SettingKey, number>>>({});
+  /** Usage telemetry, opt-out: on unless the user has turned it off. */
+  const [telemetry, setTelemetry] = useState(true);
+  const [verdicts, setVerdicts] = useState<Partial<Record<StockKey, KeyedVerdict>>>({});
+  const [checking, setChecking] = useState<Partial<Record<StockKey, number>>>({});
   /** Probes already in the air, so a re-render can't start the same one twice. */
   const inFlight = useRef(new Set<string>());
 
@@ -118,11 +126,22 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     });
   }, [open, loaded]);
 
-  const set = (key: SettingKey) => (value: string) => setValues((v) => ({ ...v, [key]: value }));
+  useEffect(() => {
+    if (!open) return;
+    void getSetting("telemetryEnabled").then((value) => setTelemetry(value !== "0"));
+  }, [open]);
+
+  /** A toggle applies immediately, unlike the text keys that need a Save. */
+  const onTelemetryChange = (checked: boolean) => {
+    setTelemetry(checked);
+    void setTelemetryEnabled(checked);
+  };
+
+  const set = (key: StockKey) => (value: string) => setValues((v) => ({ ...v, [key]: value }));
 
   /** The verdict for what's in the field *now* — a reply about older text has gone stale. */
   const verdictFor = useCallback(
-    (key: SettingKey): StockKeyVerdict | null => {
+    (key: StockKey): StockKeyVerdict | null => {
       const value = values[key].trim();
       if (!value) return null;
       const entry = verdicts[key];
@@ -131,7 +150,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     [values, verdicts],
   );
 
-  const runCheck = useCallback(async (key: SettingKey, value: string) => {
+  const runCheck = useCallback(async (key: StockKey, value: string) => {
     const token = `${key}:${value}`;
     if (inFlight.current.has(token)) return;
     inFlight.current.add(token);
@@ -185,7 +204,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         return;
       }
       await Promise.all(
-        (Object.keys(values) as SettingKey[]).map((key) => setSetting(key, values[key].trim() || null)),
+        (Object.keys(values) as StockKey[]).map((key) => setSetting(key, values[key].trim() || null)),
       );
       onOpenChange(false);
     } finally {
@@ -227,6 +246,24 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             verdict={verdictFor("pexelsApiKey")}
             busy={(checking.pexelsApiKey ?? 0) > 0}
           />
+
+          <div className="mt-5 border-t border-km-border pt-4">
+            <div className="mb-2 text-[11px] uppercase tracking-wide text-km-dim">Privacy</div>
+            <div className="flex items-start justify-between gap-3 rounded border border-km-border bg-km-track/40 px-3 py-2.5">
+              <div className="min-w-0">
+                <div className="text-[12px] font-medium text-km-text">Share anonymous usage data</div>
+                <div className="mt-0.5 text-[10.5px] leading-snug text-km-faint">
+                  Tracks which features are used so Octo Cut can be improved. No media, projects or
+                  personal content are ever sent.
+                </div>
+              </div>
+              <Switch
+                checked={telemetry}
+                onCheckedChange={onTelemetryChange}
+                className="mt-0.5 shrink-0 data-[state=checked]:bg-km-accent data-[state=unchecked]:bg-km-track"
+              />
+            </div>
+          </div>
         </div>
 
         {persistent ? null : (

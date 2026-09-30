@@ -11,11 +11,14 @@ export type AssetId = string;
 export type KeyframeId = string;
 export type TrackId = string;
 
+/** The three top-level editor surfaces. `image` is the still-image canvas. */
+export type EditorMode = "edit" | "broadcast" | "image";
+
 export type LayerType = "video" | "image" | "text" | "audio" | "sticker" | "effect";
 export type MediaKind = "video" | "image" | "audio";
 
 /** Properties that can be animated with keyframes. */
-export type AnimatableProp = "opacity" | "x" | "y" | "scale" | "rotation" | "volume";
+export type AnimatableProp = "opacity" | "x" | "y" | "scale" | "scaleX" | "scaleY" | "rotation" | "volume";
 
 export type Easing = "linear" | "easeIn" | "easeOut" | "easeInOut" | "easeInQuad" | "bounce";
 
@@ -161,6 +164,8 @@ export interface Transform {
   x: number;
   y: number;
   scale: number;
+  scaleX?: number;
+  scaleY?: number;
   rotation: number;
 }
 
@@ -225,6 +230,10 @@ export interface TextStyle {
   gradientColor: string;
   /** vertical tilt in degrees, for kinetic title presets */
   skew: number;
+  /** animation effect for the text */
+  animation?: "none" | "typing" | "marquee" | "slideUp";
+  /** explicit layout width (in project pixels) before scale */
+  boxWidth?: number;
 }
 
 /** Vector shapes available to sticker layers (the "Shapes" library). */
@@ -424,6 +433,8 @@ export interface EditorState {
   history: { past: Project[]; future: Project[] };
   lastAction: string;
   ui: {
+    /** which editor surface is showing — read by the MCP server to pick its catalogue */
+    mode: EditorMode;
     libraryTab: LibraryTab;
     libraryQuery: string;
     inspectorTab: InspectorTab;
@@ -447,6 +458,7 @@ export interface EditorState {
   };
   exportJobs: ExportJob[];
   voiceoverJobs: VoiceoverJob[];
+  clipboard: Layer[];
 }
 
 export interface ExportJob {

@@ -36,9 +36,14 @@ export const layerEnd = (layer: Layer) => layer.startTime + layer.duration;
 type LayerLike = Pick<Layer, "opacity" | "volume" | "transform" | "keyframes">;
 
 /** Position and size live under `transform`; opacity and volume are top-level. */
-type TransformProp = "x" | "y" | "scale" | "rotation";
+type TransformProp = "x" | "y" | "scale" | "scaleX" | "scaleY" | "rotation";
 const isTransformProp = (prop: AnimatableProp): prop is TransformProp =>
   prop !== "opacity" && prop !== "volume";
+
+/** The static (non-keyframed) value of a prop — transform props read from `transform`. */
+export function staticPropValue(layer: Layer, prop: AnimatableProp): number {
+  return isTransformProp(prop) ? layer.transform[prop] : layer[prop];
+}
 
 /**
  * Evaluate an animatable property at a layer-local time.
@@ -70,6 +75,8 @@ export interface EvaluatedLayer {
   x: number;
   y: number;
   scale: number;
+  scaleX?: number;
+  scaleY?: number;
   rotation: number;
   opacity: number;
   volume: number;
@@ -89,6 +96,8 @@ export function evaluateLayer(layer: Layer, time: number): EvaluatedLayer {
     x: evalProp(layer, "x", lt),
     y: evalProp(layer, "y", lt),
     scale: evalProp(layer, "scale", lt),
+    scaleX: layer.transform.scaleX !== undefined ? evalProp(layer, "scaleX", lt) : undefined,
+    scaleY: layer.transform.scaleY !== undefined ? evalProp(layer, "scaleY", lt) : undefined,
     rotation: evalProp(layer, "rotation", lt),
     opacity: evalProp(layer, "opacity", lt),
     volume: evalProp(layer, "volume", lt),

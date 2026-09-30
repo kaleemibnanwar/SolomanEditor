@@ -38,6 +38,34 @@ export interface FilterLook {
 export const FILTER_LOOKS: FilterLook[] = [
   { id: "none", name: "Original", hint: "no changes", filters: {}, grade: {} },
   {
+    id: "vhs",
+    name: "Retro VHS",
+    hint: "90s camcorder aesthetic",
+    filters: { brightness: 1.1, contrast: 0.9, saturate: 1.5, hueRotate: -10, blur: 0.5 },
+    grade: { temperature: 0.1, tint: 0.2, grain: 0.8 },
+  },
+  {
+    id: "cyberpunk",
+    name: "Cyberpunk",
+    hint: "neon sci-fi",
+    filters: { brightness: 1.1, contrast: 1.3, saturate: 1.8, hueRotate: 30 },
+    grade: { temperature: -0.4, tint: 0.5, vignette: 0.3 },
+  },
+  {
+    id: "sepia",
+    name: "Vintage Sepia",
+    hint: "classic old-timey brown",
+    filters: { sepia: 1, contrast: 0.9, brightness: 1.1 },
+    grade: { grain: 0.4, fade: 0.3, vignette: 0.5 },
+  },
+  {
+    id: "gothic",
+    name: "Gothic",
+    hint: "dark and moody",
+    filters: { brightness: 0.9, contrast: 1.4, saturate: 0.2 },
+    grade: { temperature: -0.2, vignette: 0.6 },
+  },
+  {
     id: "cinematic",
     name: "Cinematic",
     hint: "cool shadows, film contrast",
@@ -256,6 +284,19 @@ const effect = (
 
 export const EFFECT_PRESETS: EffectPreset[] = [
   /* ---- light ---- */
+  effect("laserGrid", "Laser Grid", "retro synthwave floor", "light", "grid", {
+    color: "rgba(255, 0, 128, 0.8)",
+    color2: "rgba(0, 255, 255, 0.5)",
+    blend: "screen",
+    amount: 0.8,
+    scale: 0.6,
+  }),
+  effect("strobe", "Strobe", "flashing light bursts", "light", "flares", {
+    color: "rgba(255, 255, 255, 0.9)",
+    blend: "screen",
+    amount: 0.9,
+    scale: 0.8,
+  }),
   effect("leakWarm", "Warm leak", "amber streak sweeping across", "light", "lightLeak", {
     color: "rgba(255,176,84,0.85)",
     color2: "rgba(255,98,46,0.7)",
@@ -700,6 +741,34 @@ export interface TextPreset {
 }
 
 export const TEXT_PRESETS: TextPreset[] = [
+  {
+    id: "typewriter",
+    label: "Typewriter",
+    hint: "classic typing effect",
+    sample: "Typewriter",
+    text: { fontFamily: "'Courier New', monospace", fontSize: 64, fontWeight: 700, color: "#111111", backgroundColor: "#ffffff", backgroundRadius: 4, animation: "typing" },
+  },
+  {
+    id: "subtitle",
+    label: "Subtitle",
+    hint: "readable captions",
+    sample: "This is a subtitle",
+    text: { fontSize: 48, fontWeight: 600, color: "#ffffff", backgroundColor: "rgba(0,0,0,0.6)", backgroundRadius: 8, strokeWidth: 0, shadow: false, align: "center" },
+  },
+  {
+    id: "newsTicker",
+    label: "News Ticker",
+    hint: "scrolling bottom bar",
+    sample: "BREAKING NEWS: SCROLLING MARQUEE EFFECT",
+    text: { fontSize: 40, fontWeight: 700, color: "#ffffff", backgroundColor: "#d92121", backgroundRadius: 0, animation: "marquee" },
+  },
+  {
+    id: "slideReveal",
+    label: "Slide Reveal",
+    hint: "smooth upward entry",
+    sample: "Slide Up",
+    text: { fontSize: 80, fontWeight: 800, color: "#ffffff", shadow: true, animation: "slideUp" },
+  },
   {
     id: "title",
     label: "Title",

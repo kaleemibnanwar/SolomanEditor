@@ -48,6 +48,9 @@ export function endMediaCapture() {
   captureTracks.clear();
 }
 
+/** Whether an export/broadcast capture is in progress (drives capture-mode sync). */
+export const isCapturing = () => capturing;
+
 function syncCaptureVideo(el: HTMLVideoElement, desired: number) {
   const now = performance.now();
   let track = captureTracks.get(el);
@@ -74,7 +77,11 @@ function syncCaptureVideo(el: HTMLVideoElement, desired: number) {
     }
   }
 
-  if (el.paused && el.readyState >= 2) void el.play().catch(() => undefined);
+  // Attempt to play even before the element reports current data: a paused
+  // element that has not decoded yet stays blank otherwise, and `play()` simply
+  // resolves once it has. Without this an unready clip at export start never
+  // starts decoding and is captured as a placeholder for the whole run.
+  if (el.paused) void el.play().catch(() => undefined);
 }
 
 /* ------------------------------------------------------------------ *

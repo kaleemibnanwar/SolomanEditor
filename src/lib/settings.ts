@@ -17,11 +17,11 @@
  * UI say which of the two the user is getting.
  */
 
-export type SettingKey = "pixabayApiKey" | "pexelsApiKey";
+export type SettingKey = "pixabayApiKey" | "pexelsApiKey" | "telemetryEnabled";
 
-export const SETTING_KEYS: SettingKey[] = ["pixabayApiKey", "pexelsApiKey"];
+export const SETTING_KEYS: SettingKey[] = ["pixabayApiKey", "pexelsApiKey", "telemetryEnabled"];
 
-export interface SettingsValues extends Record<SettingKey, string> {}
+export type SettingsValues = Record<SettingKey, string>;
 
 const LOCAL_STORAGE_PREFIX = "octo-cut:setting:";
 

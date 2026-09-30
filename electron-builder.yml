@@ -20,6 +20,21 @@ directories:
   output: release
   buildResources: build
 
+# Auto-update feed. The updater (`electron-updater` in `electron/main.cjs`)
+# reads the `latest*.yml` files electron-builder uploads to GitHub Releases here.
+# The owner/repo point at the PUBLIC release repo (`octocut`), which is where
+# binaries are distributed and where the updater looks — never the private
+# source repo.
+publish:
+  provider: github
+  owner: kaleemibnanwar
+  repo: octocut
+  publishAutoUpdate: true
+
+# Write `latest.yml`, `beta.yml`, `alpha.yml` so the updater can follow whatever
+# release channel a build belongs to.
+generateUpdatesFilesForAllChannels: true
+
 # `node_modules` is deliberately absent: the editor has no runtime dependency
 # the bundler did not already inline, and shipping it would multiply the
 # installer for nothing. `npmRebuild` is off for the same reason — there are no
@@ -40,6 +55,7 @@ extraMetadata:
 
 mac:
   target:
+    - zip
     - dmg
   category: public.app-category.video
   darkModeSupport: true

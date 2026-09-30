@@ -7,7 +7,7 @@
  * via a single view scale, so dragging behaves identically at any zoom level.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { drawFrame } from "@/lib/compositor";
+import { drawFrame, DEFAULT_WRAP_RATIO } from "@/lib/compositor";
 import {
   boundsIntersect,
   boundsOf,
@@ -15,6 +15,7 @@ import {
   evaluatedBox,
   handlesOf,
   pivotFor,
+  rotatePoint,
   pointInBox,
   snapBox,
   snapTargets,
@@ -54,11 +55,15 @@ type Drag =
   | {
       kind: "resize";
       id: LayerId;
+      handle: HandleId;
       pivot: Point;
       d0: number;
       scale0: number;
+      scaleX0: number;
+      scaleY0: number;
       cx0: number;
       cy0: number;
+      rotation0: number;
       origin: Point;
       recorded: boolean;
     }
@@ -159,6 +164,9 @@ export default function Stage() {
         layers: orderedLayers(st.project),
         assets: st.assets,
         time: st.currentTime,
+        // In image mode the canvas is a single still, so entry animations render
+        // settled — otherwise a "typewriter" or "slide up" title is blank at t=0.
+        animationComplete: st.ui.mode === "image",
       });
     };
     const schedule = () => {
@@ -242,11 +250,15 @@ export default function Stage() {
     dragRef.current = {
       kind: "resize",
       id,
+      handle,
       pivot,
       d0,
       scale0: box.scale,
+      scaleX0: box.scaleX ?? 1,
+      scaleY0: box.scaleY ?? 1,
       cx0: box.cx,
       cy0: box.cy,
+      rotation0: box.rotation,
       origin: p,
       recorded: false,
     };
@@ -298,16 +310,71 @@ export default function Stage() {
       }
 
       if (drag.kind === "resize") {
-        const d1 = dist(drag.pivot, p);
-        const nextScale = clamp((drag.scale0 * d1) / drag.d0, MIN_SCALE, MAX_SCALE);
-        const ratio = nextScale / drag.scale0;
+        const localP = rotatePoint(p, drag.pivot, -drag.rotation0);
+        const localOrigin = rotatePoint(drag.origin, drag.pivot, -drag.rotation0);
+        
+        let ratioX = 1;
+        let ratioY = 1;
+
+        if (["e", "w"].includes(drag.handle)) {
+          const d1 = Math.abs(localP.x - drag.pivot.x);
+          const d0 = Math.max(0.001, Math.abs(localOrigin.x - drag.pivot.x));
+          ratioX = d1 / d0;
+        } else if (["n", "s"].includes(drag.handle)) {
+          const d1 = Math.abs(localP.y - drag.pivot.y);
+          const d0 = Math.max(0.001, Math.abs(localOrigin.y - drag.pivot.y));
+          ratioY = d1 / d0;
+        } else {
+          // corners scale uniformly
+          const d1 = dist(drag.pivot, p);
+          ratioX = ratioY = d1 / drag.d0;
+        }
+
+        const layer = editorStore.getState().project.layers[drag.id];
+        const isTextSide = layer?.type === "text" && layer.text && ["e", "w"].includes(drag.handle);
+
+        const localC0 = rotatePoint({ x: drag.cx0, y: drag.cy0 }, drag.pivot, -drag.rotation0);
+        const localC1 = {
+          x: drag.pivot.x + (localC0.x - drag.pivot.x) * ratioX,
+          y: drag.pivot.y + (localC0.y - drag.pivot.y) * ratioY
+        };
+        const newCenter = rotatePoint(localC1, drag.pivot, drag.rotation0);
+
+        if (isTextSide) {
+          const oldBoxWidth = layer.text!.boxWidth ?? (editorStore.getState().project.settings.width * DEFAULT_WRAP_RATIO);
+          const newBoxWidth = Math.max(10, oldBoxWidth * ratioX);
+          
+          recordOnce(drag);
+          editor().updateLayer(drag.id, { text: { ...layer.text!, boxWidth: newBoxWidth } });
+          editor().updateLayerTransform(
+            drag.id,
+            { x: newCenter.x, y: newCenter.y },
+            false
+          );
+          return;
+        }
+
+        const nextScale = clamp(drag.scale0 * (ratioX === ratioY ? ratioX : 1), MIN_SCALE, MAX_SCALE);
+        let nextScaleX = drag.scaleX0;
+        let nextScaleY = drag.scaleY0;
+
+        if (ratioX !== ratioY) {
+          if (["e", "w"].includes(drag.handle)) {
+             nextScaleX = Math.max(0.01, drag.scaleX0 * ratioX);
+          } else {
+             nextScaleY = Math.max(0.01, drag.scaleY0 * ratioY);
+          }
+        }
+
         recordOnce(drag);
         editor().updateLayerTransform(
           drag.id,
           {
             scale: nextScale,
-            x: drag.pivot.x + (drag.cx0 - drag.pivot.x) * ratio,
-            y: drag.pivot.y + (drag.cy0 - drag.pivot.y) * ratio,
+            scaleX: nextScaleX,
+            scaleY: nextScaleY,
+            x: newCenter.x,
+            y: newCenter.y,
           },
           false,
         );

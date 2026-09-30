@@ -1,33 +1,55 @@
 /**
  * Top bar — project identity, history controls, project settings and export.
  */
-import { useState, type CSSProperties, type MouseEvent } from "react";
+import { useState, useEffect, type CSSProperties, type MouseEvent } from "react";
 import {
+  Activity,
+  BarChart2,
   Bot,
   ChevronDown,
+  Cpu,
+  Download,
   FolderOpen,
+  Image,
   KeyRound,
   Loader2,
+  MonitorPlay,
   Radio,
   Redo2,
+  RefreshCw,
   RotateCcw,
   Save,
+  ServerCrash,
   Settings2,
   Undo2,
   Upload,
+  Wifi,
 } from "lucide-react";
 import octoLogo from "@/assets/octo-logo.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ColorField, NumberField, Row, SegmentedField, Section } from "@/components/editor/fields";
 import WindowControls from "@/components/editor/WindowControls";
 import { saveProjectNow } from "@/hooks/useProjectLibrary";
 import { resetToDemo } from "@/lib/demo";
 import { resetActivityTracking } from "@/lib/mcp/activity";
+import { useUpdater } from "@/lib/updater";
 import { windowControls } from "@/lib/windowControls";
 import { cn } from "@/lib/utils";
 import { editor, editorStore, selectCanRedo, selectCanUndo, useEditor } from "@/store/editorStore";
+import type { EditorMode } from "@/types/editor";
 
 /**
  * The bar doubles as the window's drag handle now that `frame: false` (see
@@ -39,25 +61,146 @@ const DRAG_REGION = { WebkitAppRegion: "drag" } as CSSProperties;
 const NO_DRAG = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
 const RESOLUTIONS: { label: string; width: number; height: number }[] = [
-  { label: "1920 × 1080 · Landscape", width: 1920, height: 1080 },
-  { label: "1080 × 1920 · Portrait", width: 1080, height: 1920 },
+  { label: "3840 × 2160 · 4K Landscape", width: 3840, height: 2160 },
+  { label: "2160 × 3840 · 4K Portrait", width: 2160, height: 3840 },
+  { label: "1920 × 1080 · HD Landscape", width: 1920, height: 1080 },
+  { label: "1080 × 1920 · HD Portrait", width: 1080, height: 1920 },
+  { label: "1280 × 720 · 720p Landscape", width: 1280, height: 720 },
+  { label: "720 × 1280 · 720p Portrait", width: 720, height: 1280 },
   { label: "1080 × 1080 · Square", width: 1080, height: 1080 },
-  { label: "1280 × 720 · Light", width: 1280, height: 720 },
-  { label: "3840 × 2160 · 4K", width: 3840, height: 2160 },
 ];
+
+function SystemStats() {
+  const [stats, setStats] = useState<{ memory: { total: number; free: number; used: number }; cpu: { percentCPUUsage: number }; gpu: number; ping: number } | null>(null);
+  
+  useEffect(() => {
+    const bridge = typeof window === "undefined" ? undefined : window.octoCutHost?.system;
+    if (!bridge) return;
+    
+    let mounted = true;
+    let timer: number | undefined;
+    const tick = async () => {
+      try {
+        const result = await bridge.stats();
+        if (mounted) setStats(result);
+      } catch (error) {
+        console.warn("System performance stats are unavailable.", error);
+      }
+      if (mounted) timer = window.setTimeout(tick, 3000);
+    };
+    void tick();
+    return () => {
+      mounted = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, []);
+
+  if (!stats) return null;
+  const memUsed = Math.round(stats.memory.used / 1024 / 1024);
+  const memTotal = Math.round(stats.memory.total / 1024 / 1024);
+  const cpu = Math.round(stats.cpu.percentCPUUsage);
+  const gpu = stats.gpu >= 0 ? Math.round(stats.gpu) : null;
+
+  return (
+    <div data-no-drag style={NO_DRAG} className="mx-2">
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            title="System performance"
+            className="grid h-8 w-8 place-items-center rounded-md text-km-dim transition hover:bg-km-raised hover:text-km-text"
+          >
+            <BarChart2 className="h-4 w-4" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-48 border-km-border bg-km-panel p-3 shadow-lg">
+          <div className="flex flex-col gap-3 text-[11px] text-km-faint">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5"><Cpu className="w-3.5 h-3.5 text-blue-400/80" /> CPU</span>
+              <span className="text-km-text font-medium">{cpu}%</span>
+            </div>
+            {gpu !== null && (
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5"><MonitorPlay className="w-3.5 h-3.5 text-cyan-400/80" /> GPU</span>
+                <span className="text-km-text font-medium">{gpu}%</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 text-purple-400/80" /> RAM</span>
+              <span className="text-km-text font-medium">{memUsed} / {memTotal}GB</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5"><Wifi className="w-3.5 h-3.5 text-green-400/80" /> Ping</span>
+              {stats.ping >= 0 ? (
+                <span className="text-km-text font-medium">{Math.round(stats.ping)}ms</span>
+              ) : (
+                <span className="text-red-400/80 font-medium">Offline</span>
+              )}
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+/**
+ * Auto-update affordance. The updater only exists in a packaged desktop build,
+ * so in a plain browser tab (`available === false`) this renders nothing. When a
+ * download has finished it becomes a restart button; while it is still working
+ * it is a quiet "checking… / n%" hint so the user is not left guessing.
+ */
+function UpdateIndicator() {
+  const { state, available, install } = useUpdater();
+  if (!available) return null;
+
+  if (state.status === "downloaded") {
+    return (
+      <Button
+        size="sm"
+        data-no-drag
+        style={NO_DRAG}
+        title={`Version ${state.version ?? ""} is ready`}
+        onClick={install}
+        className="h-8 gap-1.5 border border-km-border bg-km-raised px-2 text-[11.5px] text-km-text hover:bg-km-accent hover:text-white"
+      >
+        <Download className="h-3.5 w-3.5" />
+        Update ready — restart
+      </Button>
+    );
+  }
+
+  if (state.status === "downloading") {
+    return (
+      <span data-no-drag style={NO_DRAG} className="flex items-center gap-1.5 text-[11px] text-km-faint">
+        <RefreshCw className="h-3 w-3 animate-spin" />
+        Updating {state.percent}%
+      </span>
+    );
+  }
+
+  if (state.status === "checking" || state.status === "available" || state.status === "installing") {
+    return (
+      <span data-no-drag style={NO_DRAG} className="flex items-center gap-1.5 text-[11px] text-km-faint">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        {state.status === "available" ? "Update available" : "Checking for updates…"}
+      </span>
+    );
+  }
+
+  return null;
+}
 
 export default function TopBar({
   onExport,
   onAgent,
   onProjects,
   mode,
-  onToggleMode,
 }: {
   onExport: () => void;
   onAgent: () => void;
   onProjects: () => void;
-  mode: "edit" | "broadcast";
-  onToggleMode: () => void;
+  mode: EditorMode;
 }) {
   const settings = useEditor((s) => s.project.settings);
   const canUndo = useEditor(selectCanUndo);
@@ -130,14 +273,28 @@ export default function TopBar({
       <div data-no-drag style={NO_DRAG} className="flex items-center gap-0.5 rounded-md border border-km-border bg-km-track p-0.5">
         <button
           type="button"
-          onClick={() => mode !== "edit" && onToggleMode()}
+          onClick={() => editor().setUi({ mode: "edit" })}
+          aria-pressed={mode === "edit"}
           className={cn("rounded px-2 py-0.5 text-[11px] transition", mode === "edit" ? "bg-km-raised text-km-text" : "text-km-dim hover:text-km-text")}
         >
           Edit
         </button>
         <button
           type="button"
-          onClick={() => mode !== "broadcast" && onToggleMode()}
+          onClick={() => editor().setUi({ mode: "image" })}
+          aria-pressed={mode === "image"}
+          className={cn(
+            "flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition",
+            mode === "image" ? "bg-km-accent text-white" : "text-km-dim hover:text-km-text",
+          )}
+        >
+          <Image className="h-3 w-3" />
+          Image
+        </button>
+        <button
+          type="button"
+          onClick={() => editor().setUi({ mode: "broadcast" })}
+          aria-pressed={mode === "broadcast"}
           className={cn(
             "flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition",
             mode === "broadcast" ? "bg-km-accent text-white" : "text-km-dim hover:text-km-text",
@@ -205,18 +362,38 @@ export default function TopBar({
       <span className="hidden max-w-[220px] truncate text-[11px] text-km-faint xl:inline">{lastAction}</span>
 
       <div data-no-drag style={NO_DRAG} className="ml-auto flex items-center gap-2">
-        <button
-          type="button"
-          title="Rebuild the demo project"
-          onClick={() => {
-            resetActivityTracking();
-            void resetToDemo();
-          }}
-          className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-km-dim transition hover:bg-km-raised hover:text-km-text"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          Demo
-        </button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              type="button"
+              title="Rebuild the demo project"
+              className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-km-dim transition hover:bg-km-raised hover:text-km-text"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Demo
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Rebuild the demo project?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This replaces everything on the canvas with a fresh demo and discards your current work. Save first if you want to keep it.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  resetActivityTracking();
+                  void resetToDemo();
+                }}
+              >
+                Rebuild demo
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <button
           type="button"
@@ -325,9 +502,41 @@ export default function TopBar({
         </>
       )}
 
+      {/* Image mode: just the document name and the agent, no video controls. */}
+      {mode === "image" && (
+        <>
+          <div className="mx-1 h-5 w-px bg-km-border" />
+
+          <Input
+            data-no-drag
+            style={NO_DRAG}
+            value={settings.name}
+            onChange={(e) => editor().updateSettings({ name: e.target.value })}
+            className="h-7 w-48 border-transparent bg-transparent px-2 text-[12.5px] text-km-text hover:border-km-border focus-visible:border-km-border focus-visible:ring-0"
+            aria-label="Image name"
+          />
+
+          <div data-no-drag style={NO_DRAG} className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              title="Connect an AI agent over MCP"
+              onClick={onAgent}
+              className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-km-dim transition hover:bg-km-raised hover:text-km-text"
+            >
+              <Bot className="h-3.5 w-3.5" />
+              Agent
+            </button>
+          </div>
+        </>
+      )}
+
       {/* In broadcast mode the editor controls (and their ml-auto spacer) are
           gone, so the window controls need their own right-alignment spacer. */}
       {mode === "broadcast" && <div className="ml-auto" />}
+
+      <UpdateIndicator />
+
+      <SystemStats />
 
       {windowControls() && <div className="mx-1 h-5 w-px bg-km-border" />}
 

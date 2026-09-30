@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/assets/octo-logo.png" alt="Octo Cut logo" width="220" />
+</p>
+
 # Octo Cut
 
 A video editor that runs entirely in the browser. Import clips, images and audio, arrange them on a
@@ -105,6 +109,22 @@ no display. `window created` without `editor loaded` means the window exists and
 window is still shown, on a four-second fallback timer, and displays the reason. And a window that
 appears on its own saying *Octo Cut could not load the editor* is the editor bundle failing rather
 than Electron: it names the URL and the error code, and the terminal says so too.
+
+---
+
+## Releases & auto-update
+
+The desktop app ships through a two-repository setup: source lives in the private
+`octocut-source` repo, and installers are published to the public `octocut` repo, where
+`electron-updater` reads its feed. On macOS and Windows the app checks for updates at
+launch and hourly, downloads them in the background, and shows an "Update ready —
+restart" button in the top bar. Linux updates are manual.
+
+Usage is tracked anonymously with [Microsoft Clarity](https://www.npmjs.com/package/@microsoft/clarity)
+and is on by default — turn it off any time under **Keys → Privacy** in the app.
+
+The full build/release pipeline — CI matrix, signing, secrets, versioning — is
+documented in [`docs/BUILD_RELEASE_UPDATE.md`](docs/BUILD_RELEASE_UPDATE.md).
 
 ---
 
@@ -308,8 +328,9 @@ Audio. Encoding quality and available formats follow the browser's own encoder.
 
 ## Known limitations
 
-- **Nothing is persisted.** There is no project save/load yet — a refresh regenerates the demo
-  project, so export before you reload.
+- **Projects autosave locally.** Work is written to a local store as you edit — SQLite in the desktop
+  app, IndexedDB in a plain browser tab — so a reload restores your last project. Clearing the
+  browser's site data removes it.
 - **Keep the tab in the foreground while exporting.** The encoder is wall-clock driven; a backgrounded
   tab gets throttled and the recording will drift or stall.
 - **MP4 is browser-dependent** (see *Export* above).

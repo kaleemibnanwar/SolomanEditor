@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import octoLogo from "@/assets/octo-logo.png";
 import BroadcastStudio from "@/components/broadcast/BroadcastStudio";
+import ImageStudio from "@/components/image/ImageStudio";
 import AgentPanel from "@/components/editor/AgentPanel";
 import { DragGhost } from "@/components/editor/DragGhost";
 import { ExportDialog } from "@/components/editor/ExportDialog";
@@ -27,7 +28,7 @@ import { resetToDemo } from "@/lib/demo";
 import { pumpExportQueue } from "@/lib/exporter";
 import { installHttpHost } from "@/lib/mcp/host";
 import { installAgentAccess } from "@/lib/mcp/session";
-import { installAutosave } from "@/lib/projects";
+import { installAutosave, listProjects, openProject } from "@/lib/projects";
 import { pumpVoiceoverQueue } from "@/lib/voiceover";
 import { editor, useEditor } from "@/store/editorStore";
 import { usePlayback } from "@/hooks/usePlayback";
@@ -37,8 +38,9 @@ import { useEditorShortcuts } from "@/hooks/useShortcuts";
 export default function EditorShell() {
   const [exportOpen, setExportOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
-  const [mode, setMode] = useState<"edit" | "broadcast">("edit");
   const [boot, setBoot] = useState({ message: "Warming up…", progress: 0 });
+  /** The mode lives in the store so the MCP server can read it to pick its catalogue. */
+  const mode = useEditor((s) => s.ui.mode);
   const booting = useEditor((s) => s.ui.booting);
   /** Lives in the store because the media panel opens it when a key is missing. */
   const settingsOpen = useEditor((s) => s.ui.settingsOpen);
@@ -51,6 +53,14 @@ export default function EditorShell() {
 
   usePlayback();
   useEditorShortcuts({ onExport: () => setExportOpen(true), onSave: () => void saveProjectNow() });
+
+  /** The image mode is a single frame: entering it freezes playback at the origin. */
+  useEffect(() => {
+    if (mode === "image") {
+      editor().pause();
+      editor().setCurrentTime(0);
+    }
+  }, [mode]);
 
   /**
    * Radix renders popovers and dialogs into document.body, outside this subtree,
@@ -80,11 +90,27 @@ export default function EditorShell() {
    */
   useEffect(() => installAutosave(), []);
 
-  /** Boot the generated demo project once, with progress on the overlay. */
+  /** Boot the last edited project or a demo project once, with progress on the overlay. */
   useEffect(() => {
     if (booted.current) return;
     booted.current = true;
-    void resetToDemo((message, progress) => setBoot({ message, progress }));
+    (async () => {
+      try {
+        const projects = await listProjects();
+        if (projects.length > 0) {
+          setBoot({ message: "Loading project…", progress: 0.5 });
+          await openProject(projects[0].id);
+          editor().setUi({ booting: false });
+          return;
+        }
+      } catch (error) {
+        console.error("Could not restore the last project; loading the demo instead.", error);
+        toast.warning("Your last project could not be opened", {
+          description: "Octo Cut loaded the demo so you can keep working. Your saved project was not changed.",
+        });
+      }
+      void resetToDemo((message, progress) => setBoot({ message, progress }));
+    })();
   }, []);
 
   /** Exports run one at a time, driven from here so the UI never blocks. */
@@ -137,7 +163,6 @@ export default function EditorShell() {
         onAgent={() => setAgentOpen(true)}
         onProjects={() => editor().setUi({ projectsOpen: true })}
         mode={mode}
-        onToggleMode={() => setMode((current) => (current === "edit" ? "broadcast" : "edit"))}
       />
 
       {mode === "edit" ? (
@@ -155,6 +180,8 @@ export default function EditorShell() {
 
           <Timeline />
         </div>
+      ) : mode === "image" ? (
+        <ImageStudio />
       ) : (
         <BroadcastStudio />
       )}

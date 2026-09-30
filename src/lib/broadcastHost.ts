@@ -8,9 +8,13 @@
  * can push to RTMP.
  */
 
-/** The live state of the (single) broadcast session, pushed up from main. */
+/** The live state of one broadcast session, pushed up from main. */
 export interface BroadcastStatus {
+  /** The main process's id for this session. `null` only for the "none" sentinel. */
+  id: string | null;
   running: boolean;
+  /** True between reconnect attempts, after the connection dropped. */
+  reconnecting: boolean;
   label: string | null;
   protocol: string | null;
   loop: boolean;
@@ -23,8 +27,11 @@ export interface BroadcastStatus {
   speed: string | null;
   fps: number | null;
   error: string | null;
+  note?: string | null;
   /** ffmpeg version string, when one was found. */
   ffmpeg?: string;
+  /** The last 40 lines of ffmpeg output logs. */
+  tail?: string[];
 }
 
 /** A broadcast's source: a file/URL on disk, or the editor's live composed timeline. */
@@ -40,13 +47,20 @@ export interface StartBroadcastPayload {
   loop?: boolean;
   transcode?: boolean;
   label?: string;
+  /** Target video bitrate in bps. Omit for the resolution-aware "auto" value. */
+  videoBitrate?: number;
+  /** Source frame rate, for a correct keyframe interval. Omit for file/URL. */
+  fps?: number;
 }
 
 export interface BroadcastBridge {
   probe: () => Promise<{ available: boolean; version: string | null }>;
-  status: () => Promise<BroadcastStatus>;
+  /** Every session in flight, most recent first. Empty when nothing is pushing. */
+  status: () => Promise<BroadcastStatus[]>;
+  /** Start one push; resolves with that session's status (id included). */
   start: (payload: StartBroadcastPayload) => Promise<BroadcastStatus>;
-  stop: () => Promise<BroadcastStatus>;
+  /** Stop one session by id, or every session when no id is given. */
+  stop: (id?: string) => Promise<BroadcastStatus[]>;
   /** Feed a MediaRecorder chunk to ffmpeg's stdin (timeline broadcasts). */
   chunk: (chunk: Uint8Array) => void;
   onStatus: (handler: (status: BroadcastStatus) => void) => void;
@@ -60,7 +74,9 @@ export const broadcastAvailable = (): boolean => broadcastBridge() !== null;
 
 /** The state a broadcast host reports when there is no bridge to talk to. */
 export const NO_BROADCAST_STATUS: BroadcastStatus = {
+  id: null,
   running: false,
+  reconnecting: false,
   label: null,
   protocol: null,
   loop: false,
@@ -100,7 +116,12 @@ export function subscribeBroadcastStatus(listener: (status: BroadcastStatus) => 
   }
 
   statusListeners.add(listener);
-  void bridge.status().then(listener).catch(() => {});
+  // The current snapshot is a list of sessions — deliver each one to the
+  // single-session handler, then rely on onStatus for subsequent changes.
+  void bridge
+    .status()
+    .then((sessions) => sessions.forEach(listener))
+    .catch(() => {});
   return () => {
     statusListeners.delete(listener);
   };

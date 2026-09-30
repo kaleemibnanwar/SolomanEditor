@@ -144,11 +144,14 @@ const TABS: TabMeta[] = [
   },
 ];
 
-export default function AssetLibrary() {
+export default function AssetLibrary({ tabs }: { tabs?: LibraryTab[] } = {}) {
   const tab = useEditor((s) => s.ui.libraryTab);
   const query = useEditor((s) => s.ui.libraryQuery);
 
-  const meta = TABS.find((entry) => entry.id === tab) ?? TABS[0];
+  /** A mode can restrict the rail to a subset of categories (the image editor
+   *  hides video/audio/stock/transitions). Empty/omitted shows the whole rail. */
+  const visibleTabs = tabs?.length ? TABS.filter((entry) => tabs.includes(entry.id)) : TABS;
+  const meta = visibleTabs.find((entry) => entry.id === tab) ?? visibleTabs[0];
 
   return (
     <aside className="flex w-[272px] shrink-0 border-r border-km-border bg-km-panel">
@@ -156,7 +159,7 @@ export default function AssetLibrary() {
         aria-label="Asset categories"
         className="km-scroll-none flex w-[58px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-km-border bg-km-panel2/50 px-1 py-1.5"
       >
-        {TABS.map((entry) => (
+        {visibleTabs.map((entry) => (
           <RailButton
             key={entry.id}
             meta={entry}

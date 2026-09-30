@@ -1,18 +1,25 @@
 /**
  * THE BROADCAST STUDIO — a separate mode from the editor.
  *
- * Destinations on the left; the console on the right. For the Timeline source,
- * the console IS the editor: the real Stage (live preview) and the real layered
- * Timeline (b-roll tracks/clips), whose per-row eye toggle decides what is on air
- * — the same `layer.hidden` flag the compositor and the capture engine both honor.
+ * Destinations on the left (saved RTMP/SRT configs); a list of independent
+ * STREAMS on the right. Each stream is its own (source → destinations) pair, so
+ * several can run at once: one video file to YouTube + Facebook, another to a
+ * second channel and a hardware encoder, the live timeline to a third — all
+ * simultaneous. A stream's destinations are ticked per-stream; starting one does
+ * not disturb the others, and each is stoppable on its own.
+ *
+ * The composed timeline is a special case: there is one editor, so at most one
+ * timeline stream runs at a time, and the live Stage + Timeline are shown beneath
+ * the list so the piece stays editable while it is on air.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Check,
   FileVideo,
   Film,
   KeyRound,
   Link2,
+  MonitorPlay,
   Play,
   Plus,
   Radio,
@@ -23,6 +30,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Stage from "@/components/editor/Stage";
 import Timeline from "@/components/editor/Timeline";
 import {
@@ -30,27 +38,29 @@ import {
   STREAM_PLATFORMS,
   STREAM_PROTOCOLS,
   deleteStreamConfig,
-  ingestUrl,
   listStreamConfigs,
   saveStreamConfig,
   type StreamConfig,
   type StreamProtocol,
 } from "@/lib/broadcast";
-import { startTimelinePush, stopTimelinePush } from "@/lib/broadcastController";
-import { NO_BROADCAST_STATUS, broadcastBridge, subscribeBroadcastStatus, type BroadcastStatus } from "@/lib/broadcastHost";
+import { startSourcePush, startTimelinePush, stopTimelinePush, setTimelineSessionsListener } from "@/lib/broadcastController";
+import { broadcastBridge, subscribeBroadcastStatus, type BroadcastStatus } from "@/lib/broadcastHost";
+import { uid } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 type SourceKind = "file" | "url" | "timeline";
 
-const EMPTY_DRAFT = {
-  name: "",
-  platform: "YouTube",
-  protocol: "rtmp" as StreamProtocol,
-  address: "",
-  streamKey: "",
-  username: "",
-  password: "",
-};
+/** A local draft of one (source → destinations) broadcast, before it is started. */
+interface StreamDraft {
+  id: string;
+  sourceKind: SourceKind;
+  sourceValue: string;
+  configIds: string[];
+  loop: boolean;
+  transcode: boolean;
+  /** Target bitrate in Mbps as typed; "" = auto. */
+  bitrate: string;
+}
 
 const SOURCE_OPTIONS: { kind: SourceKind; label: string; icon: ReactNode }[] = [
   { kind: "file", label: "File", icon: <FileVideo className="h-3.5 w-3.5" /> },
@@ -58,207 +68,318 @@ const SOURCE_OPTIONS: { kind: SourceKind; label: string; icon: ReactNode }[] = [
   { kind: "timeline", label: "Timeline", icon: <Film className="h-3.5 w-3.5" /> },
 ];
 
+const newStream = (): StreamDraft => ({
+  id: uid("stream"),
+  sourceKind: "file",
+  sourceValue: "",
+  configIds: [],
+  loop: true,
+  transcode: true,
+  bitrate: "",
+});
+
+let cachedStreams: StreamDraft[] = [];
+let cachedStreamSessions: Record<string, string[]> = {};
+
 export default function BroadcastStudio() {
   const [configs, setConfigs] = useState<StreamConfig[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [draft, setDraft] = useState(EMPTY_DRAFT);
-  const [sourceKind, setSourceKind] = useState<SourceKind>("file");
-  const [sourceValue, setSourceValue] = useState("");
-  const [loop, setLoop] = useState(true);
-  const [transcode, setTranscode] = useState(true);
-  const [status, setStatus] = useState<BroadcastStatus>(NO_BROADCAST_STATUS);
+  const [streams, setStreams] = useState<StreamDraft[]>(cachedStreams);
+  const [sessionsById, setSessionsById] = useState<Record<string, BroadcastStatus>>({});
+  const [streamSessions, setStreamSessions] = useState<Record<string, string[]>>(cachedStreamSessions);
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [ffmpeg, setFfmpeg] = useState<{ available: boolean; version: string | null }>({ available: false, version: null });
-  const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
+  const [destDialog, setDestDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [showEditor, setShowEditor] = useState(false);
+
+  useEffect(() => {
+    cachedStreams = streams;
+  }, [streams]);
+
+  useEffect(() => {
+    cachedStreamSessions = streamSessions;
+  }, [streamSessions]);
 
   const bridge = useMemo(() => broadcastBridge(), []);
+
+  /** The timeline listener below is registered once; it reads this instead of a
+   *  stale `streams` closure, so it always names the current timeline stream. */
+  const streamsRef = useRef(streams);
+  useEffect(() => {
+    streamsRef.current = streams;
+  }, [streams]);
 
   const reload = async () => setConfigs(await listStreamConfigs());
 
   useEffect(() => {
     void reload();
-    const unsubscribe = subscribeBroadcastStatus(setStatus);
+    const unsubscribe = subscribeBroadcastStatus((status) => {
+      if (!status.id) return;
+      setSessionsById((prev) => ({ ...prev, [status.id as string]: status }));
+    });
+    setTimelineSessionsListener((ids) => {
+      setStreamSessions((prev) => {
+        const streamId = streamsRef.current.find((s) => s.sourceKind === "timeline")?.id;
+        if (!streamId) return prev;
+        return { ...prev, [streamId]: ids };
+      });
+    });
     void bridge?.probe().then(setFfmpeg).catch(() => {});
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      setTimelineSessionsListener(null);
+    };
+    // `streams` deliberately not a dependency: editing a draft must not re-list
+    // configs, re-subscribe to status, or re-probe ffmpeg on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge]);
 
-  const selected = configs.find((c) => c.id === selectedId) ?? null;
-  const liveConfigId = status.running && status.label ? (configs.find((c) => c.name === status.label)?.id ?? null) : null;
+  const isStreamLive = (streamId: string): boolean =>
+    (streamSessions[streamId] ?? []).some((sid) => sessionsById[sid]?.running);
 
-  const select = (config: StreamConfig) => {
-    setSelectedId(config.id);
-    setDraft({
-      name: config.name,
-      platform: config.platform ?? "Custom server",
-      protocol: config.protocol,
-      address: config.address,
-      streamKey: config.streamKey,
-      username: config.username ?? "",
-      password: config.password ?? "",
+  const timelineLive = streams.some((s) => s.sourceKind === "timeline" && isStreamLive(s.id));
+  const hasTimelineStream = streams.some((s) => s.sourceKind === "timeline");
+
+  const sessionsFor = (streamId: string): BroadcastStatus[] =>
+    (streamSessions[streamId] ?? [])
+      .map((sid) => sessionsById[sid])
+      .filter((s): s is BroadcastStatus => !!s);
+
+  const setBusy = (streamId: string, on: boolean) =>
+    setBusyIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(streamId);
+      else next.delete(streamId);
+      return next;
     });
-    setShowAuth(!!config.username);
-    setSaved(false);
+
+  const updateStream = (streamId: string, patch: Partial<StreamDraft>) =>
+    setStreams((prev) => prev.map((s) => (s.id === streamId ? { ...s, ...patch } : s)));
+
+  const toggleDest = (streamId: string, configId: string) =>
+    setStreams((prev) =>
+      prev.map((s) => {
+        if (s.id !== streamId) return s;
+        const has = s.configIds.includes(configId);
+        return { ...s, configIds: has ? s.configIds.filter((id) => id !== configId) : [...s.configIds, configId] };
+      }),
+    );
+
+  const removeStream = (streamId: string) => {
+    if (isStreamLive(streamId)) return;
+    setStreams((prev) => prev.filter((s) => s.id !== streamId));
   };
 
-  const newConfig = () => {
-    setSelectedId(null);
-    setDraft(EMPTY_DRAFT);
-    setShowAuth(false);
-    setSaved(false);
+  const bitrateBps = (value: string): number | undefined => {
+    if (!value.trim()) return undefined;
+    const n = Number.parseFloat(value);
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 1_000_000) : undefined;
   };
 
-  const applyPlatformDefault = (platform: string) => {
-    const preset = PLATFORM_DEFAULTS.find((p) => p.platform === platform);
-    setDraft((d) => ({ ...d, platform, ...(preset ? { protocol: preset.protocol, address: preset.address } : {}) }));
-  };
-
-  const persist = async () => {
-    if (!draft.name.trim() || !draft.address.trim()) return;
-    setBusy(true);
-    try {
-      const config = await saveStreamConfig({ id: selectedId ?? undefined, ...draft });
-      setSelectedId(config.id);
-      await reload();
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1600);
-    } finally {
-      setBusy(false);
+  const startStream = async (streamId: string) => {
+    const stream = streams.find((s) => s.id === streamId);
+    if (!stream || !bridge) return;
+    if (!stream.configIds.length) {
+      setErrors((prev) => ({ ...prev, [streamId]: "Tick at least one destination." }));
+      return;
     }
-  };
+    if (stream.sourceKind !== "timeline" && !stream.sourceValue.trim()) {
+      setErrors((prev) => ({ ...prev, [streamId]: stream.sourceKind === "file" ? "Give a file path." : "Give a URL." }));
+      return;
+    }
 
-  const remove = async () => {
-    if (!selected) return;
-    await deleteStreamConfig(selected.id);
-    setSelectedId(null);
-    setDraft(EMPTY_DRAFT);
-    await reload();
-  };
-
-  const start = async () => {
-    if (!selected) return;
-    setBusy(true);
+    setErrors((prev) => ({ ...prev, [streamId]: "" }));
+    setBusy(streamId, true);
     try {
-      if (sourceKind === "timeline") {
-        await startTimelinePush(selected.id, { loop, transcode });
-        setStatus((await bridge?.status()) ?? NO_BROADCAST_STATUS);
-      } else if (bridge) {
-        const next = await bridge.start({
-          url: ingestUrl(selected),
-          protocol: selected.protocol,
-          source: { kind: sourceKind as "file" | "url", value: sourceValue },
-          loop,
-          transcode,
-          label: selected.name,
+      const bps = bitrateBps(stream.bitrate);
+      let sessionIds: string[];
+      if (stream.sourceKind === "timeline") {
+        const result = await startTimelinePush(stream.configIds, {
+          loop: stream.loop,
+          transcode: stream.transcode,
+          videoBitrate: bps,
         });
-        setStatus(next);
+        sessionIds = result.started.map((t) => t.sessionId).filter(Boolean);
+        setShowEditor(true);
+      } else {
+        const statuses = await startSourcePush(
+          stream.configIds,
+          { kind: stream.sourceKind, value: stream.sourceValue },
+          { loop: stream.loop, transcode: stream.transcode, videoBitrate: bps },
+        );
+        sessionIds = statuses.map((s) => s.id).filter((id): id is string => !!id);
       }
+      // A re-start replaces this stream's previous sessions; drop the stale ones.
+      const oldIds = streamSessions[streamId] ?? [];
+      if (oldIds.length) {
+        setSessionsById((prev) => {
+          const next = { ...prev };
+          for (const sid of oldIds) delete next[sid];
+          return next;
+        });
+      }
+      setStreamSessions((prev) => ({ ...prev, [streamId]: sessionIds }));
+    } catch (error) {
+      setErrors((prev) => ({ ...prev, [streamId]: error instanceof Error ? error.message : String(error) }));
     } finally {
-      setBusy(false);
+      setBusy(streamId, false);
     }
   };
 
-  const stop = async () => {
-    setBusy(true);
+  const stopStream = async (streamId: string) => {
+    const stream = streams.find((s) => s.id === streamId);
+    if (!stream) return;
+    setBusy(streamId, true);
     try {
-      await stopTimelinePush();
-      if (bridge) setStatus((await bridge.stop()) ?? NO_BROADCAST_STATUS);
+      if (stream.sourceKind === "timeline") {
+        await stopTimelinePush();
+      } else if (bridge) {
+        const ids = streamSessions[streamId] ?? [];
+        await Promise.all(ids.map((id) => bridge.stop(id)));
+      }
+      const done = streamSessions[streamId] ?? [];
+      setStreamSessions((prev) => {
+        const next = { ...prev };
+        delete next[streamId];
+        return next;
+      });
+      setSessionsById((prev) => {
+        const next = { ...prev };
+        for (const sid of done) delete next[sid];
+        return next;
+      });
+    } catch (error) {
+      setErrors((prev) => ({ ...prev, [streamId]: error instanceof Error ? error.message : String(error) }));
     } finally {
-      setBusy(false);
+      setBusy(streamId, false);
     }
   };
 
-  const canStart =
-    selected &&
-    (sourceKind === "timeline" ? true : sourceValue.trim().length > 0) &&
-    (sourceKind === "timeline" ? true : ffmpeg.available) &&
-    !busy;
+  const stopAll = async () => {
+    const liveStreams = streams.filter((s) => isStreamLive(s.id));
+    await Promise.all(liveStreams.map((s) => stopStream(s.id)));
+  };
+
+  const anyLive = streams.some((s) => isStreamLive(s.id));
+
+  const openEditDest = (id: string) => setDestDialog({ open: true, id });
+  const openNewDest = () => setDestDialog({ open: true, id: null });
 
   return (
     <div className="flex min-h-0 flex-1">
-      <DestinationsRail
-        configs={configs}
-        selectedId={selectedId}
-        liveConfigId={liveConfigId}
-        onSelect={select}
-        onNew={newConfig}
-      />
+      <DestinationsRail configs={configs} onAdd={openNewDest} onEdit={openEditDest} />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <BroadcastHeader
-          selected={selected}
-          sourceKind={sourceKind}
-          setSourceKind={setSourceKind}
-          loop={loop}
-          setLoop={setLoop}
-          transcode={transcode}
-          setTranscode={setTranscode}
-          status={status}
-          ffmpeg={ffmpeg}
-          busy={busy}
-          canStart={!!canStart}
-          onStart={() => void start()}
-          onStop={() => void stop()}
-        />
-
-        {sourceKind === "timeline" ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex min-h-0 flex-1">
-              <Stage />
-            </div>
-            <Timeline />
+        <header className="flex shrink-0 items-center gap-3 border-b border-km-border bg-km-panel px-4 py-2.5">
+          <Radio className={cn("h-4 w-4 shrink-0", anyLive ? "animate-pulse text-red-400" : "text-km-dim")} />
+          <div className="min-w-0">
+            <p className="truncate text-[12.5px] font-medium text-km-text">Streams</p>
+            <p className="truncate text-[10px] text-km-faint">
+              {anyLive ? "Running — each stream is stoppable on its own" : "One source per stream, any destinations you tick"}
+            </p>
           </div>
-        ) : (
-          <div className="mx-auto w-full max-w-3xl space-y-4 overflow-y-auto p-5 [scrollbar-width:thin]">
-            <StatusBanner status={status} ffmpeg={ffmpeg} target={selected} />
-            {!bridge && <NoDesktopBanner />}
 
-            <DestinationCard
-              draft={draft}
-              setDraft={setDraft}
-              isNew={!selected}
-              saved={saved}
-              busy={busy}
-              showAuth={showAuth}
-              setShowAuth={setShowAuth}
-              onPlatform={applyPlatformDefault}
-              onSave={() => void persist()}
-              onDelete={selected ? () => void remove() : undefined}
-            />
+          <div className="ml-auto flex items-center gap-3">
+            {hasTimelineStream && (
+              <Button size="sm" variant="ghost" onClick={() => setShowEditor((v) => !v)} className="h-7 gap-1.5 px-2.5 text-[11px] text-km-dim hover:bg-km-raised hover:text-km-text">
+                <MonitorPlay className="h-3.5 w-3.5" />
+                {showEditor ? "Hide editor" : "Editor"}
+              </Button>
+            )}
+            <span className={cn("flex items-center gap-1 text-[10px]", ffmpeg.available ? "text-km-faint" : "text-amber-400")}>
+              <Wifi className="h-3 w-3" />
+              {ffmpeg.available ? "" : "ffmpeg"}
+            </span>
+            {anyLive ? (
+              <Button size="sm" onClick={() => void stopAll()} className="h-8 gap-1.5 bg-red-500 px-3 text-[12px] text-white hover:bg-red-600">
+                <Square className="h-3.5 w-3.5" />
+                Stop all
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => setStreams((prev) => [...prev, newStream()])} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-white hover:bg-km-accent2">
+                <Plus className="h-3.5 w-3.5" />
+                Add stream
+              </Button>
+            )}
+          </div>
+        </header>
 
-            <SourceInputCard sourceKind={sourceKind} sourceValue={sourceValue} setSourceValue={setSourceValue} />
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 [scrollbar-width:thin]">
+          {streams.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center">
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-km-raised">
+                <Radio className="h-6 w-6 text-km-dim" />
+              </span>
+              <p className="text-[13px] font-medium text-km-text">No streams yet</p>
+              <p className="max-w-[46ch] text-[11px] leading-relaxed text-km-faint">
+                Add a stream, pick a source (a file, a URL, or the live timeline) and tick the destinations it should reach.
+                Add more streams to broadcast to different channels at the same time.
+              </p>
+              <Button size="sm" onClick={() => setStreams((prev) => [...prev, newStream()])} className="mt-2 h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-white hover:bg-km-accent2">
+                <Plus className="h-3.5 w-3.5" />
+                Add stream
+              </Button>
+            </div>
+          ) : (
+            streams.map((stream) => (
+              <StreamCard
+                key={stream.id}
+                stream={stream}
+                configs={configs}
+                sessions={sessionsFor(stream.id)}
+                live={isStreamLive(stream.id)}
+                busy={busyIds.has(stream.id)}
+                error={errors[stream.id] ?? null}
+                onChange={(patch) => updateStream(stream.id, patch)}
+                onToggleDest={(configId) => toggleDest(stream.id, configId)}
+                onStart={() => void startStream(stream.id)}
+                onStop={() => void stopStream(stream.id)}
+                onRemove={() => removeStream(stream.id)}
+              />
+            ))
+          )}
+        </div>
+
+        {(showEditor || timelineLive) && hasTimelineStream && (
+          <div className="flex h-[42%] min-h-[240px] shrink-0 flex-col border-t border-km-border">
+            <Stage />
+            <Timeline />
           </div>
         )}
       </main>
+
+      {destDialog.open && (
+        <DestinationDialog
+          config={configs.find((c) => c.id === destDialog.id) ?? null}
+          onClose={() => setDestDialog({ open: false, id: null })}
+          onChanged={() => void reload()}
+        />
+      )}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ *
- * Destinations rail
+ * Destinations rail (config management)
  * ------------------------------------------------------------------ */
 
 function DestinationsRail({
   configs,
-  selectedId,
-  liveConfigId,
-  onSelect,
-  onNew,
+  onAdd,
+  onEdit,
 }: {
   configs: StreamConfig[];
-  selectedId: string | null;
-  liveConfigId: string | null;
-  onSelect: (config: StreamConfig) => void;
-  onNew: () => void;
+  onAdd: () => void;
+  onEdit: (id: string) => void;
 }) {
   return (
-    <aside className="flex w-[300px] shrink-0 flex-col border-r border-km-border bg-km-panel">
+    <aside className="flex w-[280px] shrink-0 flex-col border-r border-km-border bg-km-panel">
       <div className="flex items-center justify-between border-b border-km-border px-4 py-3">
         <div>
           <p className="text-[13px] font-semibold tracking-tight text-km-text">Destinations</p>
-          <p className="text-[10.5px] text-km-faint">Where your stream goes</p>
+          <p className="text-[10.5px] text-km-faint">The servers you push to</p>
         </div>
-        <Button size="sm" onClick={onNew} className="h-7 gap-1 bg-km-accent px-2.5 text-[11px] text-white hover:bg-km-accent2">
+        <Button size="sm" onClick={onAdd} className="h-7 gap-1 bg-km-accent px-2.5 text-[11px] text-white hover:bg-km-accent2">
           <Plus className="h-3.5 w-3.5" />
           New
         </Button>
@@ -271,44 +392,33 @@ function DestinationsRail({
               <Server className="h-5 w-5 text-km-dim" />
             </span>
             <p className="text-[12px] font-medium text-km-text">No destinations yet</p>
-            <p className="text-[11px] leading-relaxed text-km-faint">
-              Add a YouTube channel, Twitch stream, hardware encoder, or any RTMP/SRT server.
-            </p>
-            <Button size="sm" variant="ghost" onClick={onNew} className="mt-1 h-7 gap-1 text-[11px] text-km-accent hover:bg-km-raised hover:text-km-accent">
+            <p className="text-[11px] leading-relaxed text-km-faint">Add a YouTube channel, Twitch stream, hardware encoder, or any RTMP/SRT server.</p>
+            <Button size="sm" variant="ghost" onClick={onAdd} className="mt-1 h-7 gap-1 text-[11px] text-km-accent hover:bg-km-raised hover:text-km-accent">
               <Plus className="h-3 w-3" />
               Create one
             </Button>
           </div>
         ) : (
-          configs.map((config) => {
-            const isSelected = selectedId === config.id;
-            const isLive = liveConfigId === config.id;
-            return (
-              <button
-                key={config.id}
-                type="button"
-                onClick={() => onSelect(config)}
-                className={cn(
-                  "group relative mx-1.5 flex items-start gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition",
-                  isSelected ? "bg-km-raised" : "hover:bg-km-track",
-                )}
-              >
-                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-km-track">
-                  <Server className="h-3.5 w-3.5 text-km-dim" />
+          configs.map((config) => (
+            <div
+              key={config.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onEdit(config.id)}
+              onKeyDown={(e) => e.key === "Enter" && onEdit(config.id)}
+              className="group relative mx-1.5 flex cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition hover:bg-km-track"
+            >
+              <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-km-track">
+                <Server className="h-3.5 w-3.5 text-km-dim" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-medium text-km-text">{config.name}</span>
+                <span className="mt-0.5 block truncate text-[10.5px] text-km-faint">
+                  {config.platform ?? "Custom"} · {config.protocol.toUpperCase()}
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="truncate text-[12px] font-medium text-km-text">{config.name}</span>
-                    {isLive && <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-red-500" />}
-                  </span>
-                  <span className="mt-0.5 block truncate text-[10.5px] text-km-faint">
-                    {config.platform ?? "Custom"} · {config.protocol.toUpperCase()}
-                  </span>
-                </span>
-                {isSelected && <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-km-accent" />}
-              </button>
-            );
-          })
+              </span>
+            </div>
+          ))
         )}
       </div>
 
@@ -320,302 +430,194 @@ function DestinationsRail({
 }
 
 /* ------------------------------------------------------------------ *
- * Header — destination + source + go live
+ * One stream: source + destinations + start/stop
  * ------------------------------------------------------------------ */
 
-function BroadcastHeader({
-  selected,
-  sourceKind,
-  setSourceKind,
-  loop,
-  setLoop,
-  transcode,
-  setTranscode,
-  status,
-  ffmpeg,
+function StreamCard({
+  stream,
+  configs,
+  sessions,
+  live,
   busy,
-  canStart,
+  error,
+  onChange,
+  onToggleDest,
   onStart,
   onStop,
+  onRemove,
 }: {
-  selected: StreamConfig | null;
-  sourceKind: SourceKind;
-  setSourceKind: (kind: SourceKind) => void;
-  loop: boolean;
-  setLoop: (loop: boolean) => void;
-  transcode: boolean;
-  setTranscode: (transcode: boolean) => void;
-  status: BroadcastStatus;
-  ffmpeg: { available: boolean; version: string | null };
+  stream: StreamDraft;
+  configs: StreamConfig[];
+  sessions: BroadcastStatus[];
+  live: boolean;
   busy: boolean;
-  canStart: boolean;
+  error: string | null;
+  onChange: (patch: Partial<StreamDraft>) => void;
+  onToggleDest: (configId: string) => void;
   onStart: () => void;
   onStop: () => void;
+  onRemove: () => void;
 }) {
-  const live = status.running;
+  const isTimeline = stream.sourceKind === "timeline";
+  const canStart = stream.configIds.length > 0 && (isTimeline || stream.sourceValue.trim().length > 0) && !busy;
+
   return (
-    <header className="flex shrink-0 items-center gap-3 border-b border-km-border bg-km-panel px-4 py-2.5">
-      <div className="flex min-w-0 items-center gap-2">
-        <Radio className={cn("h-4 w-4 shrink-0", live ? "animate-pulse text-red-400" : "text-km-dim")} />
-        <div className="min-w-0">
-          <p className="truncate text-[12.5px] font-medium text-km-text">{selected?.name ?? "No destination"}</p>
-          <p className="truncate text-[10px] text-km-faint">
-            {selected ? `${selected.protocol.toUpperCase()}${selected.platform ? ` · ${selected.platform}` : ""}` : "Pick one on the left"}
-          </p>
+    <section className={cn("rounded-xl border bg-km-panel", live ? "border-red-500/40" : "border-km-border")}>
+      <div className="flex flex-wrap items-center gap-2 border-b border-km-border/60 px-3.5 py-2.5">
+        <div className="flex items-center gap-1 rounded-lg border border-km-border bg-km-track p-1">
+          {SOURCE_OPTIONS.map((option) => (
+            <button
+              key={option.kind}
+              type="button"
+              onClick={() => onChange({ sourceKind: option.kind })}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11.5px] transition",
+                stream.sourceKind === option.kind ? "bg-km-raised font-medium text-km-text" : "text-km-dim hover:text-km-text",
+              )}
+            >
+              {option.icon}
+              {option.label}
+            </button>
+          ))}
         </div>
-      </div>
 
-      <div className="ml-auto flex items-center gap-1 rounded-lg border border-km-border bg-km-track p-1">
-        {SOURCE_OPTIONS.map((option) => (
-          <button
-            key={option.kind}
-            type="button"
-            onClick={() => setSourceKind(option.kind)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11.5px] transition",
-              sourceKind === option.kind ? "bg-km-raised font-medium text-km-text" : "text-km-dim hover:text-km-text",
-            )}
-          >
-            {option.icon}
-            {option.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <label className="flex items-center gap-1.5 text-[11px] text-km-dim" title={sourceKind === "timeline" ? "Loop the whole timeline" : "Loop the file until stopped"}>
-          <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} className="accent-[#6366f1]" />
-          Loop
-        </label>
-        {sourceKind !== "timeline" ? (
-          <label className="flex items-center gap-1.5 text-[11px] text-km-dim" title="Re-encode to H.264/AAC">
-            <input type="checkbox" checked={transcode} onChange={(e) => setTranscode(e.target.checked)} className="accent-[#6366f1]" />
-            Transcode
+        <div className="ml-auto flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-[11px] text-km-dim" title={isTimeline ? "Loop the whole timeline" : "Loop the file until stopped"}>
+            <input type="checkbox" checked={stream.loop} onChange={(e) => onChange({ loop: e.target.checked })} className="accent-[#6366f1]" />
+            Loop
           </label>
-        ) : (
-          <span className="flex items-center gap-1 text-[10px] text-km-faint" title="The live timeline is always encoded to H.264/AAC for ingest">
-            H.264/AAC
-          </span>
-        )}
-        <span className={cn("flex items-center gap-1 text-[10px]", ffmpeg.available ? "text-km-faint" : "text-amber-400")}>
-          <Wifi className="h-3 w-3" />
-          {ffmpeg.available ? "" : "ffmpeg"}
-        </span>
-
-        {live ? (
-          <Button size="sm" onClick={onStop} disabled={busy} className="h-8 gap-1.5 bg-red-500 px-3 text-[12px] text-white hover:bg-red-600">
-            <Square className="h-3.5 w-3.5" />
-            Stop
-          </Button>
-        ) : (
-          <Button size="sm" onClick={onStart} disabled={!canStart} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-white hover:bg-km-accent2">
-            <Play className="h-3.5 w-3.5" />
-            {sourceKind === "timeline" ? "Go live" : "Start"}
-          </Button>
-        )}
-      </div>
-    </header>
-  );
-}
-
-/* ------------------------------------------------------------------ *
- * Status banner (file/url console)
- * ------------------------------------------------------------------ */
-
-function StatusBanner({
-  status,
-  ffmpeg,
-  target,
-}: {
-  status: BroadcastStatus;
-  ffmpeg: { available: boolean; version: string | null };
-  target: StreamConfig | null;
-}) {
-  const live = status.running;
-  return (
-    <section className="overflow-hidden rounded-xl border border-km-border bg-km-panel">
-      <div className="flex items-center gap-3 px-4 py-3.5">
-        <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full", live ? "bg-red-500/15" : status.error ? "bg-amber-500/15" : "bg-km-raised")}>
-          <Radio className={cn("h-5 w-5", live ? "animate-pulse text-red-400" : status.error ? "text-amber-400" : "text-km-dim")} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="text-[13.5px] font-semibold tracking-tight text-km-text">{live ? "On air" : status.error ? "Stream stopped" : "Ready"}</p>
-            {live && <span className="rounded bg-red-500/20 px-1.5 py-px text-[9.5px] font-semibold uppercase tracking-wider text-red-300">LIVE</span>}
-          </div>
-          <p className="truncate text-[11px] text-km-dim">
-            {live
-              ? `${status.label ?? "stream"} → ${(status.protocol ?? "").toUpperCase()}`
-              : status.error
-                ? status.error
-                : target
-                  ? `Pointing at "${target.name}"`
-                  : "Pick a destination, then a source, then go live."}
-          </p>
-          {live && (
-            <p className="mt-0.5 font-mono text-[10.5px] text-km-faint">
-              {[status.time && `t ${status.time}`, status.bitrate, status.speed, status.fps && `${status.fps} fps`].filter(Boolean).join(" · ") || "starting…"}
-              {status.uptime > 0 && ` · up ${Math.floor(status.uptime / 60)}m ${status.uptime % 60}s`}
-            </p>
+          {!isTimeline && (
+            <label className="flex items-center gap-1.5 text-[11px] text-km-dim" title="Re-encode to H.264/AAC">
+              <input type="checkbox" checked={stream.transcode} onChange={(e) => onChange({ transcode: e.target.checked })} className="accent-[#6366f1]" />
+              Transcode
+            </label>
           )}
+          <label className="flex items-center gap-1.5 text-[11px] text-km-dim" title="Target video bitrate in Mbps — leave blank to auto-match resolution and frame rate">
+            <Input
+              value={stream.bitrate}
+              onChange={(e) => onChange({ bitrate: e.target.value })}
+              placeholder="Mbps auto"
+              className="h-7 w-20 border-km-border bg-km-track font-mono text-[11px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent"
+            />
+          </label>
+          <Button size="sm" variant="ghost" onClick={onRemove} disabled={live} className="h-7 w-7 p-0 text-km-faint hover:bg-km-raised hover:text-red-300" title="Remove this stream">
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
-    </section>
-  );
-}
 
-function NoDesktopBanner() {
-  return (
-    <section className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-      <Wifi className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-      <p className="text-[11.5px] leading-relaxed text-km-dim">
-        Broadcasting needs the desktop app and ffmpeg — a browser can't open an RTMP/SRT socket. Destinations still save here
-        and are ready the moment you run the desktop build.
-      </p>
-    </section>
-  );
-}
+      <div className="space-y-3 px-3.5 py-3">
+        {isTimeline ? (
+          <p className="text-[11.5px] leading-relaxed text-km-dim">
+            Broadcasts the composed editor timeline — every layer, headline, sticker and effect, looping live. One timeline stream can run at a time.
+          </p>
+        ) : (
+          <Input
+            value={stream.sourceValue}
+            onChange={(e) => onChange({ sourceValue: e.target.value })}
+            placeholder={stream.sourceKind === "file" ? "/home/me/video.mp4" : "https://example.com/video.mp4"}
+            className="h-9 border-km-border bg-km-track font-mono text-[12px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent"
+          />
+        )}
 
-/* ------------------------------------------------------------------ *
- * Destination form
- * ------------------------------------------------------------------ */
+        {!isTimeline && !stream.transcode && (
+          <p className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-200">
+            Stream-copy sends the source's own bitrate unchanged — a low-bitrate file will show "too low" on YouTube.
+            Enable Transcode to re-encode to the target bitrate.
+          </p>
+        )}
 
-function DestinationCard({
-  draft,
-  setDraft,
-  isNew,
-  saved,
-  busy,
-  showAuth,
-  setShowAuth,
-  onPlatform,
-  onSave,
-  onDelete,
-}: {
-  draft: typeof EMPTY_DRAFT;
-  setDraft: (updater: (d: typeof EMPTY_DRAFT) => typeof EMPTY_DRAFT) => void;
-  isNew: boolean;
-  saved: boolean;
-  busy: boolean;
-  showAuth: boolean;
-  setShowAuth: (show: boolean) => void;
-  onPlatform: (platform: string) => void;
-  onSave: () => void;
-  onDelete?: () => void;
-}) {
-  const patch = (partial: Partial<typeof EMPTY_DRAFT>) => setDraft((d) => ({ ...d, ...partial }));
-  const valid = draft.name.trim().length > 0 && draft.address.trim().length > 0;
-
-  return (
-    <section className="rounded-xl border border-km-border bg-km-panel">
-      <header className="flex items-center justify-between border-b border-km-border px-4 py-3">
         <div>
-          <p className="text-[13px] font-semibold tracking-tight text-km-text">{isNew ? "New destination" : "Destination"}</p>
-          <p className="text-[10.5px] text-km-faint">The ingest server and stream key</p>
-        </div>
-        <span className="rounded bg-km-track px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wide text-km-faint">{draft.protocol}</span>
-      </header>
-
-      <div className="space-y-4 p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Name">
-            <Input
-              value={draft.name}
-              onChange={(e) => patch({ name: e.target.value })}
-              placeholder="YouTube — main channel"
-              className="h-9 border-km-border bg-km-track text-[12.5px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent"
-            />
-          </Field>
-          <Field label="Platform (presets the server)">
-            <select
-              value={draft.platform}
-              onChange={(e) => onPlatform(e.target.value)}
-              className="h-9 w-full rounded-md border border-km-border bg-km-track px-2 text-[12.5px] text-km-text outline-none focus:ring-1 focus:ring-km-accent"
-            >
-              {STREAM_PLATFORMS.map((platform) => (
-                <option key={platform} value={platform} className="bg-km-panel2">
-                  {platform}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-[130px_1fr] gap-3">
-          <Field label="Protocol">
-            <select
-              value={draft.protocol}
-              onChange={(e) => patch({ protocol: e.target.value as StreamProtocol })}
-              className="h-9 w-full rounded-md border border-km-border bg-km-track px-2 text-[12.5px] text-km-text outline-none focus:ring-1 focus:ring-km-accent"
-            >
-              {STREAM_PROTOCOLS.map((protocol) => (
-                <option key={protocol.value} value={protocol.value} className="bg-km-panel2">
-                  {protocol.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Server address (without the key)">
-            <Input
-              value={draft.address}
-              onChange={(e) => patch({ address: e.target.value })}
-              placeholder="rtmp://a.rtmp.youtube.com/live2"
-              className="h-9 border-km-border bg-km-track font-mono text-[12px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent"
-            />
-          </Field>
-        </div>
-
-        <Field label="Stream key">
-          <div className="flex items-center gap-2">
-            <KeyRound className="h-3.5 w-3.5 shrink-0 text-km-faint" />
-            <Input
-              value={draft.streamKey}
-              onChange={(e) => patch({ streamKey: e.target.value })}
-              placeholder="abcd-1234-…"
-              className="h-9 border-km-border bg-km-track font-mono text-[12px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent"
-            />
-          </div>
-        </Field>
-
-        <div className="rounded-lg border border-km-border/60 bg-km-track/50">
-          <button type="button" onClick={() => setShowAuth(!showAuth)} className="flex w-full items-center justify-between px-3 py-2 text-[11.5px] text-km-dim transition hover:text-km-text">
-            <span>Authentication (for servers or encoders that require login)</span>
-            <span className="text-km-faint">{showAuth ? "Hide" : "Show"}</span>
-          </button>
-          {showAuth && (
-            <div className="grid grid-cols-2 gap-3 px-3 pb-3">
-              <Field label="Username">
-                <Input
-                  value={draft.username}
-                  onChange={(e) => patch({ username: e.target.value })}
-                  placeholder="optional"
-                  className="h-8 border-km-border bg-km-panel text-[12px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent"
-                />
-              </Field>
-              <Field label="Password">
-                <Input
-                  type="password"
-                  value={draft.password}
-                  onChange={(e) => patch({ password: e.target.value })}
-                  placeholder="optional"
-                  className="h-8 border-km-border bg-km-panel text-[12px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent"
-                />
-              </Field>
+          <p className="mb-1.5 text-[10.5px] font-medium text-km-faint">Destinations</p>
+          {configs.length === 0 ? (
+            <p className="text-[11px] text-km-dim">No destinations yet — create one from the left rail first.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {configs.map((config) => {
+                const ticked = stream.configIds.includes(config.id);
+                return (
+                  <button
+                    key={config.id}
+                    type="button"
+                    onClick={() => onToggleDest(config.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition",
+                      ticked ? "border-km-accent/60 bg-km-accent/15 text-km-text" : "border-km-border bg-km-track text-km-dim hover:text-km-text",
+                    )}
+                  >
+                    <span className={cn("grid h-3 w-3 place-items-center rounded-sm border", ticked ? "border-km-accent bg-km-accent" : "border-km-faint")}>
+                      {ticked && <Check className="h-2.5 w-2.5 text-white" />}
+                    </span>
+                    {config.name}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
+        {sessions.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              {sessions.map((session) => (
+                <span
+                  key={session.id}
+                  title={session.note ?? session.error ?? undefined}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10.5px]",
+                    session.running ? "border-red-500/30 bg-red-500/10 text-km-text" : "border-amber-500/30 bg-amber-500/10 text-km-text",
+                  )}
+                >
+                  <Radio className={cn("h-3 w-3", session.running ? "animate-pulse text-red-400" : "text-amber-400")} />
+                  <span className="max-w-[160px] truncate font-medium">{session.label ?? "stream"}</span>
+                  {session.reconnecting ? (
+                    <span className="font-mono text-amber-400">reconnecting…</span>
+                  ) : session.running ? (
+                    <span className="font-mono text-km-faint">
+                      {[session.bitrate, session.fps && `${session.fps} fps`, `up ${Math.floor(session.uptime / 60)}m${session.uptime % 60}s`].filter(Boolean).join(" · ")}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-km-faint">{session.error ?? "stopped"}</span>
+                  )}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-col gap-1.5 pt-1">
+              {sessions.map((session) => (
+                <details key={`logs-${session.id}`} className="rounded-lg border border-km-border/60 bg-km-track/50 group">
+                  <summary className="flex cursor-pointer items-center justify-between px-3 py-2 text-[11px] font-medium text-km-dim transition hover:text-km-text">
+                    <span>Logs: {session.label ?? "stream"}</span>
+                    <span className="text-[10px] text-km-faint group-open:hidden">Show logs</span>
+                    <span className="hidden text-[10px] text-km-faint group-open:block">Hide logs</span>
+                  </summary>
+                  <div className="border-t border-km-border/60 p-2">
+                    <pre className="max-h-[240px] overflow-y-auto whitespace-pre-wrap text-[10.5px] font-mono leading-relaxed text-km-dim [scrollbar-width:thin]">
+                      {session.tail?.length ? session.tail.join("\n") : "Waiting for ffmpeg output..."}
+                    </pre>
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {error && <p className="text-[11px] text-amber-400">! {error}</p>}
+
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={onSave} disabled={busy || !valid} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-white hover:bg-km-accent2">
-            {saved ? <Check className="h-3.5 w-3.5" /> : null}
-            {saved ? "Saved" : isNew ? "Save destination" : "Update destination"}
-          </Button>
-          {onDelete && (
-            <Button size="sm" variant="ghost" onClick={onDelete} className="h-8 gap-1 px-2.5 text-[11.5px] text-km-dim hover:bg-km-raised hover:text-red-300">
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
+          {live ? (
+            <Button size="sm" onClick={onStop} disabled={busy} className="h-8 gap-1.5 bg-red-500 px-3 text-[12px] text-white hover:bg-red-600">
+              <Square className="h-3.5 w-3.5" />
+              Stop
+            </Button>
+          ) : (
+            <Button size="sm" onClick={onStart} disabled={!canStart} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-white hover:bg-km-accent2">
+              <Play className="h-3.5 w-3.5" />
+              {isTimeline ? "Go live" : "Start"}
             </Button>
           )}
+          <span className="text-[10px] text-km-faint">
+            {stream.configIds.length} destination{stream.configIds.length === 1 ? "" : "s"}
+          </span>
         </div>
       </div>
     </section>
@@ -623,35 +625,148 @@ function DestinationCard({
 }
 
 /* ------------------------------------------------------------------ *
- * File/URL source input
+ * Destination create/edit dialog
  * ------------------------------------------------------------------ */
 
-function SourceInputCard({
-  sourceKind,
-  sourceValue,
-  setSourceValue,
-}: {
-  sourceKind: "file" | "url";
-  sourceValue: string;
-  setSourceValue: (value: string) => void;
-}) {
+const EMPTY_DRAFT = {
+  name: "",
+  platform: "YouTube",
+  protocol: "rtmp" as StreamProtocol,
+  address: "",
+  streamKey: "",
+  username: "",
+  password: "",
+};
+
+function DestinationDialog({ config, onClose, onChanged }: { config: StreamConfig | null; onClose: () => void; onChanged: () => void }) {
+  const [draft, setDraft] = useState(() =>
+    config
+      ? {
+          name: config.name,
+          platform: config.platform ?? "Custom server",
+          protocol: config.protocol,
+          address: config.address,
+          streamKey: config.streamKey,
+          username: config.username ?? "",
+          password: config.password ?? "",
+        }
+      : { ...EMPTY_DRAFT },
+  );
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [showAuth, setShowAuth] = useState(!!config?.username);
+
+  const patch = (partial: Partial<typeof EMPTY_DRAFT>) => setDraft((d) => ({ ...d, ...partial }));
+  const applyPlatformDefault = (platform: string) => {
+    const preset = PLATFORM_DEFAULTS.find((p) => p.platform === platform);
+    setDraft((d) => ({ ...d, platform, ...(preset ? { protocol: preset.protocol, address: preset.address } : {}) }));
+  };
+
+  const persist = async () => {
+    if (!draft.name.trim() || !draft.address.trim()) return;
+    setBusy(true);
+    try {
+      await saveStreamConfig({ id: config?.id, ...draft });
+      setSaved(true);
+      onChanged();
+      setTimeout(() => setSaved(false), 900);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!config) return;
+    setBusy(true);
+    try {
+      await deleteStreamConfig(config.id);
+      onChanged();
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const valid = draft.name.trim().length > 0 && draft.address.trim().length > 0;
+
   return (
-    <section className="rounded-xl border border-km-border bg-km-panel">
-      <header className="border-b border-km-border px-4 py-3">
-        <p className="text-[13px] font-semibold tracking-tight text-km-text">Source</p>
-        <p className="text-[10.5px] text-km-faint">What goes on air</p>
-      </header>
-      <div className="p-4">
-        <Field label={sourceKind === "file" ? "Video file on this computer" : "Video URL (http(s))"}>
-          <Input
-            value={sourceValue}
-            onChange={(e) => setSourceValue(e.target.value)}
-            placeholder={sourceKind === "file" ? "/home/me/video.mp4" : "https://example.com/video.mp4"}
-            className="h-9 border-km-border bg-km-track font-mono text-[12px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent"
-          />
-        </Field>
-      </div>
-    </section>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{config ? "Destination" : "New destination"}</DialogTitle>
+          <DialogDescription>The ingest server and stream key. The key is stored on this device and never echoed back.</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Name">
+              <Input value={draft.name} onChange={(e) => patch({ name: e.target.value })} placeholder="YouTube — main channel" className="h-9 border-km-border bg-km-track text-[12.5px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent" />
+            </Field>
+            <Field label="Platform (presets the server)">
+              <select value={draft.platform} onChange={(e) => applyPlatformDefault(e.target.value)} className="h-9 w-full rounded-md border border-km-border bg-km-track px-2 text-[12.5px] text-km-text outline-none focus:ring-1 focus:ring-km-accent">
+                {STREAM_PLATFORMS.map((platform) => (
+                  <option key={platform} value={platform} className="bg-km-panel2">
+                    {platform}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-[130px_1fr] gap-3">
+            <Field label="Protocol">
+              <select value={draft.protocol} onChange={(e) => patch({ protocol: e.target.value as StreamProtocol })} className="h-9 w-full rounded-md border border-km-border bg-km-track px-2 text-[12.5px] text-km-text outline-none focus:ring-1 focus:ring-km-accent">
+                {STREAM_PROTOCOLS.map((protocol) => (
+                  <option key={protocol.value} value={protocol.value} className="bg-km-panel2">
+                    {protocol.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Server address (without the key)">
+              <Input value={draft.address} onChange={(e) => patch({ address: e.target.value })} placeholder="rtmp://a.rtmp.youtube.com/live2" className="h-9 border-km-border bg-km-track font-mono text-[12px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent" />
+            </Field>
+          </div>
+
+          <Field label="Stream key">
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-3.5 w-3.5 shrink-0 text-km-faint" />
+              <Input value={draft.streamKey} onChange={(e) => patch({ streamKey: e.target.value })} placeholder="abcd-1234-…" className="h-9 border-km-border bg-km-track font-mono text-[12px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent" />
+            </div>
+          </Field>
+
+          <div className="rounded-lg border border-km-border/60 bg-km-track/50">
+            <button type="button" onClick={() => setShowAuth(!showAuth)} className="flex w-full items-center justify-between px-3 py-2 text-[11.5px] text-km-dim transition hover:text-km-text">
+              <span>Authentication (for servers or encoders that require login)</span>
+              <span className="text-km-faint">{showAuth ? "Hide" : "Show"}</span>
+            </button>
+            {showAuth && (
+              <div className="grid grid-cols-2 gap-3 px-3 pb-3">
+                <Field label="Username">
+                  <Input value={draft.username} onChange={(e) => patch({ username: e.target.value })} placeholder="optional" className="h-8 border-km-border bg-km-panel text-[12px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent" />
+                </Field>
+                <Field label="Password">
+                  <Input type="password" value={draft.password} onChange={(e) => patch({ password: e.target.value })} placeholder="optional" className="h-8 border-km-border bg-km-panel text-[12px] text-km-text focus-visible:ring-1 focus-visible:ring-km-accent" />
+                </Field>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <Button size="sm" onClick={() => void persist()} disabled={busy || !valid} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-white hover:bg-km-accent2">
+              {saved ? <Check className="h-3.5 w-3.5" /> : null}
+              {saved ? "Saved" : config ? "Update" : "Save"}
+            </Button>
+            {config && (
+              <Button size="sm" variant="ghost" onClick={() => void remove()} disabled={busy} className="h-8 gap-1 px-2.5 text-[11.5px] text-km-dim hover:bg-km-raised hover:text-red-300">
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

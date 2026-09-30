@@ -19,6 +19,7 @@ import {
   deleteProject,
   duplicateProject,
   listProjectSummaries,
+  loadSnapshotTemplate,
   newProject,
   openProject,
   saveProject,
@@ -27,7 +28,8 @@ import {
   type ProjectRecord,
   type ProjectSummary,
 } from "@/lib/projects";
-import { useEditor } from "@/store/editorStore";
+import { deleteUserTemplate, listUserTemplates, saveUserTemplate, type UserTemplate } from "@/lib/userTemplates";
+import { editor, useEditor } from "@/store/editorStore";
 
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -47,6 +49,7 @@ export async function saveProjectNow(): Promise<ProjectRecord | null> {
 
 export function useProjectLibrary(open: boolean) {
   const [summaries, setSummaries] = useState<ProjectSummary[]>([]);
+  const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   /** Whether a write made here survives a reload, or only lasts this session. */
   const [persistent, setPersistent] = useState(true);
@@ -57,8 +60,9 @@ export function useProjectLibrary(open: boolean) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [records, persists] = await Promise.all([listProjectSummaries(), storagePersists()]);
+      const [records, templates, persists] = await Promise.all([listProjectSummaries(), listUserTemplates(), storagePersists()]);
       setSummaries(records);
+      setUserTemplates(templates);
       setPersistent(persists);
     } finally {
       setLoading(false);
@@ -101,10 +105,19 @@ export function useProjectLibrary(open: boolean) {
       run(`template:${templateId}`, async () => {
         const result = await createFromTemplate(templateId);
         if (!result) throw new Error(`There is no template called “${templateId}”.`);
-        // The whole project just changed under the agent, so the "since you last
-        // looked" baseline goes with it.
         resetActivityTracking();
         return result.built.notes[0] ?? `${result.record?.name ?? "The project"} is ready to edit.`;
+      }),
+    [run],
+  );
+
+  const openSnapshotTemplate = useCallback(
+    (snapshotId: string) =>
+      run(`snapshot:${snapshotId}`, async () => {
+        const result = await loadSnapshotTemplate(snapshotId);
+        if (!result) throw new Error(`There is no snapshot called “${snapshotId}”.`);
+        resetActivityTracking();
+        return `Opened ${result.name} and ready to edit.`;
       }),
     [run],
   );
@@ -155,6 +168,16 @@ export function useProjectLibrary(open: boolean) {
     [run],
   );
 
+  const saveAsTemplate = useCallback(
+    () =>
+      run("save-template", async () => {
+        const project = editor().project;
+        const template = await saveUserTemplate(project.settings.name || "Untitled template", "A saved project snapshot", project);
+        return `Saved "${template.name}" to your templates.`;
+      }),
+    [run],
+  );
+
   const startNew = useCallback(
     () =>
       run("new", async () => {
@@ -165,18 +188,34 @@ export function useProjectLibrary(open: boolean) {
     [run],
   );
 
+  const removeTemplate = async (id: string) => {
+    setBusy(`del-template:${id}`);
+    try {
+      await deleteUserTemplate(id);
+      await refresh();
+    } catch (error) {
+      toast.error("Could not delete template", { description: describe(error) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return {
     summaries,
+    userTemplates,
     loading,
     persistent,
     busy,
     currentId,
     createTemplate,
+    openSnapshotTemplate,
     openSaved,
     duplicate,
     remove,
+    removeTemplate,
     saveCurrent,
     saveCopy,
+    saveAsTemplate,
     startNew,
     refresh,
   };

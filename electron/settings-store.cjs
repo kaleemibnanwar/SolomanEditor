@@ -21,7 +21,7 @@ const path = require("node:path");
 const FILE_NAME = "octo-cut-settings.json";
 
 /** Keys this store will read/write. Anything else in the file is preserved but ignored. */
-const KNOWN_KEYS = new Set(["pixabayApiKey", "pexelsApiKey"]);
+const KNOWN_KEYS = new Set(["pixabayApiKey", "pexelsApiKey", "telemetryEnabled"]);
 
 function filePathIn(userDataDir) {
   return path.join(userDataDir, FILE_NAME);

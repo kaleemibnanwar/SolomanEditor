@@ -15,6 +15,7 @@
 import { evaluateLayer, filterString, layerSpansTime } from "@/lib/anim";
 import { renderInk, type OverlayDraw } from "@/lib/ink";
 import { DEFAULT_SHAPE_STYLE, type FilterLook } from "@/lib/library";
+import { isCapturing } from "@/lib/playback";
 import { paintShape, shapePath } from "@/lib/shapes";
 import { combineFx, rampsAt, transitionRgb, type RampInk } from "@/lib/transitions";
 import { uid } from "@/lib/time";
@@ -116,8 +117,9 @@ export function getBaseSize(layer: Layer, settings: ProjectSettings, assets: Rec
     }
     case "text": {
       if (!layer.text) return { width: 400, height: 100 };
-      const block = measureText(layer.text, settings.width * DEFAULT_WRAP_RATIO);
-      return { width: block.width, height: block.height };
+      const maxWidth = layer.text.boxWidth ?? (settings.width * DEFAULT_WRAP_RATIO);
+      const block = measureText(layer.text, maxWidth);
+      return { width: maxWidth, height: block.height };
     }
     case "sticker":
       return layer.sticker?.shape
@@ -167,14 +169,17 @@ export interface DrawArgs {
   time: number;
   /** draw the project background colour */
   drawBackground?: boolean;
+  /** Render entry text animations (typing/slideUp/marquee) as already finished,
+   *  so a single still frame shows the text fully rather than blank at t=0. */
+  animationComplete?: boolean;
 }
 
-export function drawFrame({ ctx, settings, layers, assets, time, drawBackground = true }: DrawArgs) {
+export function drawFrame({ ctx, settings, layers, assets, time, drawBackground = true, animationComplete = false }: DrawArgs) {
   if (drawBackground) paintBackground(ctx, settings);
 
   for (const layer of layers) {
     if (layer.hidden) continue;
-    drawLayer(ctx, layer, settings, assets, time);
+    drawLayer(ctx, layer, settings, assets, time, animationComplete);
   }
 }
 
@@ -192,6 +197,7 @@ function drawLayer(
   settings: ProjectSettings,
   assets: Record<string, Asset>,
   time: number,
+  animationComplete: boolean,
 ) {
   // Audio has no pixels; its gain envelope is handled by the playback graph.
   if (layer.type === "audio") return;
@@ -233,7 +239,7 @@ function drawLayer(
     view: { width: settings.width, height: settings.height },
     center: { x: values.x, y: values.y },
     base,
-    scale: { x: values.scale, y: values.scale },
+    scale: { x: values.scale * (values.scaleX ?? 1), y: values.scale * (values.scaleY ?? 1) },
     rotation: values.rotation,
     alpha,
     filter: filterString(layer),
@@ -248,7 +254,7 @@ function drawLayer(
     shaderProgress: shader?.ramp.progress ?? 1,
     shaderColor: shader ? transitionRgb(shader.ramp.color) : [1, 1, 1],
     seedKey: layer.id,
-    paint: (target) => paintLayer(target, layer, base, assets, settings.width),
+    paint: (target) => paintLayer(target, layer, base, assets, settings.width, localTime, animationComplete),
   });
 
   ctx.restore();
@@ -260,6 +266,8 @@ function paintLayer(
   base: BaseSize,
   assets: Record<string, Asset>,
   projectWidth: number,
+  localTime: number,
+  animationComplete: boolean,
 ) {
   switch (layer.type) {
     case "video":
@@ -267,7 +275,7 @@ function paintLayer(
       paintMedia(ctx, layer, assets, base);
       break;
     case "text":
-      paintText(ctx, layer, base, projectWidth);
+      paintText(ctx, layer, base, projectWidth, localTime, animationComplete);
       break;
     case "sticker":
       paintSticker(ctx, layer, base);
@@ -278,40 +286,78 @@ function paintLayer(
   }
 }
 
+/** Decoded poster images, keyed by asset — drawn when a video can't be sampled. */
+const posterCache = new Map<string, HTMLImageElement>();
+
+function paintPoster(ctx: CanvasRenderingContext2D, asset: Asset, base: BaseSize) {
+  if (asset.thumbnail) {
+    let img = posterCache.get(asset.id);
+    if (!img) {
+      img = new Image();
+      img.src = asset.thumbnail;
+      posterCache.set(asset.id, img);
+    }
+    if (img.complete && img.naturalWidth > 0) {
+      ctx.drawImage(img, -base.width / 2, -base.height / 2, base.width, base.height);
+      return;
+    }
+  }
+  // No poster yet — a faint box keeps the layer visible rather than a hole.
+  ctx.fillStyle = "rgba(255,255,255,0.04)";
+  ctx.fillRect(-base.width / 2, -base.height / 2, base.width, base.height);
+}
+
 function paintMedia(ctx: CanvasRenderingContext2D, layer: Layer, assets: Record<string, Asset>, base: BaseSize) {
   const asset = layer.assetId ? assets[layer.assetId] : undefined;
   if (!asset?.el) return;
   const el = asset.el as HTMLVideoElement | HTMLImageElement;
-  if (el instanceof HTMLVideoElement && (el.readyState < 2 || el.videoWidth === 0)) {
-    // Nothing to paint until the element has decoded a frame.
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
-    ctx.fillRect(-base.width / 2, -base.height / 2, base.width, base.height);
+
+  // A video that has not decoded its current frame yet (right after a seek —
+  // pausing, scrubbing and the export's capture start all seek) cannot be
+  // sampled without throwing. During a capture (export/broadcast) a blank hole
+  // is worse than a stale frame, so paint the poster; in the live preview a
+  // poster is a wrong-time frame that flashes on every seek, so keep the faint
+  // placeholder box the initial versions used.
+  if (el instanceof HTMLVideoElement && el.readyState < 2) {
+    if (isCapturing()) {
+      paintPoster(ctx, asset, base);
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,0.04)";
+      ctx.fillRect(-base.width / 2, -base.height / 2, base.width, base.height);
+    }
     return;
   }
+
   try {
     ctx.drawImage(el, -base.width / 2, -base.height / 2, base.width, base.height);
   } catch {
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
-    ctx.fillRect(-base.width / 2, -base.height / 2, base.width, base.height);
+    // A tainted image can't be sampled at all; only a video has a poster to
+    // fall back on, and an image is left transparent rather than drawn over.
+    if (el instanceof HTMLVideoElement) paintPoster(ctx, asset, base);
   }
 }
 
-function paintText(ctx: CanvasRenderingContext2D, layer: Layer, base: BaseSize, projectWidth: number) {
+function paintText(ctx: CanvasRenderingContext2D, layer: Layer, base: BaseSize, projectWidth: number, localTime: number, animationComplete: boolean) {
   const style = layer.text;
   if (!style) return;
   // Same wrap width as `getBaseSize` so the lines match the frame that was measured.
-  const block = measureText(style, projectWidth * DEFAULT_WRAP_RATIO);
+  const maxWidth = style.boxWidth ?? (projectWidth * DEFAULT_WRAP_RATIO);
+  const block = measureText(style, maxWidth);
   const lineHeight = style.fontSize * style.lineHeight;
   const top = -base.height / 2;
+
+  ctx.save();
 
   if (style.skew) {
     const shear = Math.tan((style.skew * Math.PI) / 180);
     ctx.transform(1, 0, -shear, 1, shear * base.height * 0.5, 0);
   }
 
+  const padX = style.fontSize * 0.32;
+  const padY = style.fontSize * 0.18;
+
+  // Background is stationary
   if (style.backgroundColor && style.backgroundColor !== "transparent") {
-    const padX = style.fontSize * 0.32;
-    const padY = style.fontSize * 0.18;
     ctx.fillStyle = style.backgroundColor;
     roundRectPath(
       ctx,
@@ -324,13 +370,37 @@ function paintText(ctx: CanvasRenderingContext2D, layer: Layer, base: BaseSize, 
     ctx.fill();
   }
 
+  const anchorX = style.align === "center" ? 0 : style.align === "left" ? -base.width / 2 : base.width / 2;
+
+  // Clip the text to the bounding box plus padding so marquee doesn't bleed out
+  roundRectPath(
+    ctx,
+    -base.width / 2 - padX,
+    top - padY,
+    base.width + padX * 2,
+    base.height + padY * 2,
+    style.backgroundRadius || 0,
+  );
+  ctx.clip();
+
+  if (!animationComplete && style.animation === "marquee") {
+    const speed = 150; // pixels per second
+    const offset = -(localTime * speed) % (block.width + base.width);
+    const startX = base.width / 2 - anchorX;
+    ctx.translate(offset + startX, 0);
+  } else if (!animationComplete && style.animation === "slideUp") {
+    // slide up and fade in over first 1 second
+    const progress = Math.min(localTime / 1.0, 1.0);
+    const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+    ctx.translate(0, (1 - easeOutQuart) * 50);
+    ctx.globalAlpha *= easeOutQuart;
+  }
+
   ctx.font = fontString(style);
   ctx.textBaseline = "middle";
   ctx.textAlign = style.align;
   const spacingCtx = ctx as CanvasRenderingContext2D & { letterSpacing?: string };
   if (style.letterSpacing) spacingCtx.letterSpacing = `${style.letterSpacing}px`;
-
-  const anchorX = style.align === "center" ? 0 : style.align === "left" ? -base.width / 2 : base.width / 2;
 
   /** Flat colour, or a vertical gradient across the whole block. */
   const fillFor = (): string | CanvasGradient => {
@@ -341,7 +411,22 @@ function paintText(ctx: CanvasRenderingContext2D, layer: Layer, base: BaseSize, 
     return grad;
   };
 
+  let charsToDraw = Infinity;
+  if (!animationComplete && style.animation === "typing") {
+    const charsPerSecond = 20;
+    charsToDraw = Math.floor(localTime * charsPerSecond);
+  }
+
+  let charsDrawn = 0;
   block.lines.forEach((line, i) => {
+    if (charsDrawn >= charsToDraw) return;
+    
+    let drawLine = line;
+    if (charsDrawn + line.length > charsToDraw) {
+      drawLine = line.slice(0, charsToDraw - charsDrawn);
+    }
+    charsDrawn += line.length;
+
     const y = top + lineHeight * (i + 0.5);
     if (style.shadow) {
       ctx.save();
@@ -349,20 +434,21 @@ function paintText(ctx: CanvasRenderingContext2D, layer: Layer, base: BaseSize, 
       ctx.shadowBlur = style.fontSize * 0.18;
       ctx.shadowOffsetY = style.fontSize * 0.05;
       ctx.fillStyle = fillFor();
-      ctx.fillText(line, anchorX, y);
+      ctx.fillText(drawLine, anchorX, y);
       ctx.restore();
     }
     if (style.strokeWidth > 0) {
       ctx.lineJoin = "round";
       ctx.lineWidth = style.strokeWidth;
       ctx.strokeStyle = style.strokeColor;
-      ctx.strokeText(line, anchorX, y);
+      ctx.strokeText(drawLine, anchorX, y);
     }
     ctx.fillStyle = fillFor();
-    ctx.fillText(line, anchorX, y);
+    ctx.fillText(drawLine, anchorX, y);
   });
 
   if (style.letterSpacing) spacingCtx.letterSpacing = "0px";
+  ctx.restore();
 }
 
 /** Linear interpolation between two hex colours. Falls back to `to`. */

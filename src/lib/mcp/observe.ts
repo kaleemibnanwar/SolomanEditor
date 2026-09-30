@@ -17,6 +17,7 @@
  *     and stated outright.
  */
 import { evaluateLayer, filterString, isNeutralGrade } from "@/lib/anim";
+import { boxBounds, evaluatedBox } from "@/lib/geometry";
 import { junctionsOnTrack } from "@/lib/bonds";
 import {
   BACKGROUND_PRESETS,
@@ -274,6 +275,68 @@ export function buildOnScreen(state: EditorStoreState, time: number): Json {
     note: visible.length
       ? "Listed front-most first. `visibleOpacity` accounts for the layer's own hidden flag."
       : "Nothing is on screen at this time — the compositor would render the project background.",
+  };
+}
+
+/**
+ * The still-image verification report: every layer at `t = 0`, front-most first,
+ * with its evaluated opacity, transform and the axis-aligned on-canvas bounding
+ * box (project pixels, origin top-left), plus which layers are clipped by the
+ * canvas edge or fully off it. This is the image mode's "what will actually come
+ * out" check — geometry is computed from the same `evaluatedBox` the stage draws
+ * selection boxes from, so the numbers match what a person sees.
+ */
+export function buildImageVerify(state: EditorStoreState): Json {
+  const { project, assets } = state;
+  const settings = project.settings;
+  const W = settings.width;
+  const H = settings.height;
+  const rowOf = new Map(topFirstTracks(project).map((t, i) => [t.id, i]));
+
+  const layers = orderedLayers(project)
+    .filter((layer) => layer.type !== "audio" && !layer.hidden)
+    .reverse() // orderedLayers is back→front; front-most reads first
+    .map((layer) => {
+      const evaluated = evaluateLayer(layer, 0);
+      const box = evaluatedBox(layer, assets, settings, 0);
+      const bounds = box ? boxBounds(box) : null;
+      const clipped = bounds && (bounds.left < 0 || bounds.top < 0 || bounds.right > W || bounds.bottom > H);
+      const off = bounds && (bounds.right <= 0 || bounds.bottom <= 0 || bounds.left >= W || bounds.top >= H);
+      return {
+        id: layer.id,
+        name: layer.name,
+        type: layer.type,
+        row: rowOf.get(layer.trackId) ?? null,
+        z: layer.zIndex,
+        opacity: round(evaluated.opacity, 4),
+        transform: {
+          x: round(evaluated.x, 2),
+          y: round(evaluated.y, 2),
+          scale: round(evaluated.scale, 4),
+          rotation: round(evaluated.rotation, 2),
+        },
+        bounds: bounds
+          ? { left: round(bounds.left, 1), top: round(bounds.top, 1), right: round(bounds.right, 1), bottom: round(bounds.bottom, 1) }
+          : null,
+        clippedByCanvas: !!clipped,
+        offCanvas: !!off,
+      };
+    });
+
+  const offCanvas = layers.filter((l) => l.offCanvas).map((l) => l.name as string);
+  const clipped = layers.filter((l) => l.clippedByCanvas && !l.offCanvas).map((l) => l.name as string);
+
+  return {
+    canvas: { width: W, height: H },
+    layerCount: layers.length,
+    layers,
+    offCanvas,
+    clippedByCanvas: clipped,
+    note: layers.length
+      ? `Front-most first; bounds are project pixels (origin top-left).${
+          offCanvas.length ? ` Off-canvas: ${offCanvas.join(", ")}.` : ""
+        }${clipped.length ? ` Partly clipped by the canvas edge: ${clipped.join(", ")}.` : ""}`
+      : `Nothing is on the canvas — an export would be the project background alone (${W}×${H}).`,
   };
 }
 

@@ -5,7 +5,7 @@
  * single history entry per gesture, so a drag is one undo step rather than a
  * hundred. `useHistoryGesture` is what makes that happen.
  */
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
@@ -107,25 +107,39 @@ export function NumberField({
   suffix?: string;
   disabled?: boolean;
 }) {
+  // Keep the raw text while typing so partial input ("-", "0.", "") isn't
+  // reverted by the controlled value; commit on blur/Enter. `type="text"` +
+  // `inputMode="decimal"` (rather than `type="number"`) because a number input
+  // cannot hold a leading "-" or a trailing ".", which made negatives untypeable.
+  const [draft, setDraft] = useState<string | null>(null);
+  const display = draft ?? (Number.isFinite(value) ? String(Math.round(value * 1000) / 1000) : "0");
+
   return (
     <Row label={label}>
       <div className="relative">
         <Input
-          type="number"
-          value={Number.isFinite(value) ? Math.round(value * 1000) / 1000 : 0}
-          min={min}
-          max={max}
-          step={step}
+          type="text"
+          inputMode="decimal"
+          value={display}
           disabled={disabled}
           onChange={(e) => {
-            const next = Number(e.target.value);
+            setDraft(e.target.value);
+            const text = e.target.value.trim();
+            if (text === "") return;
+            const next = Number(text);
             if (Number.isFinite(next)) onChange(next);
           }}
-          onBlur={(e) => {
-            const next = Number(e.target.value);
-            if (Number.isFinite(next)) onCommit?.(next);
+          onBlur={() => {
+            const text = (draft ?? "").trim();
+            const next = Number(text);
+            if (text !== "" && Number.isFinite(next)) onCommit?.(next);
+            else onCommit?.(value);
+            setDraft(null);
           }}
-          className={cn(inputClass, suffix && "pr-7", "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+          }}
+          className={cn(inputClass, suffix && "pr-7")}
         />
         {suffix && (
           <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-km-faint">

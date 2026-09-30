@@ -44,7 +44,9 @@ import type {
   RpcId,
 } from "@/lib/mcp/protocol";
 import { formatIssues, validateArgs } from "@/lib/mcp/schema";
-import { TOOLS } from "@/lib/mcp/tools";
+import { IMAGE_TOOLS } from "@/lib/mcp/imageTools";
+import { CONTROL_TOOLS, IMPORT_TOOLS, OBSERVE_TOOLS, TOOLS } from "@/lib/mcp/tools";
+import type { ToolDefinition } from "@/lib/mcp/kit";
 import { round } from "@/lib/time";
 import { editor } from "@/store/editorStore";
 
@@ -96,16 +98,41 @@ export interface McpServer {
  * The catalogue, in wire form
  * ------------------------------------------------------------------ */
 
+/**
+ * Image mode exposes its own catalogue: the shared observe / import / selection /
+ * history tools from the video editor, plus the image-specific composition and
+ * export tools. `tools/list` and `tools/call` resolve against whichever one the
+ * active editor mode names.
+ */
+const SHARED_IMAGE_NAMES = new Set([
+  "import_media",
+  "list_assets",
+  "list_library",
+  "get_editor_state",
+  "get_selection",
+  "select_clips",
+  "edit_history",
+]);
+
+const IMAGE_CATALOGUE: ToolDefinition[] = [
+  ...[...OBSERVE_TOOLS, ...CONTROL_TOOLS, ...IMPORT_TOOLS].filter((tool) => SHARED_IMAGE_NAMES.has(tool.name)),
+  ...IMAGE_TOOLS,
+];
+
+/** The catalogue the active editor mode exposes. */
+const activeCatalogue = (): ToolDefinition[] => (editor().ui.mode === "image" ? IMAGE_CATALOGUE : TOOLS);
+
 /** `run` is ours, not the client's — the wire only ever sees the declaration. */
-const TOOL_LIST: McpTool[] = TOOLS.map((tool) => ({
+const toWireTool = (tool: ToolDefinition): McpTool => ({
   name: tool.name,
   title: tool.title,
   description: tool.description,
   inputSchema: tool.inputSchema,
   annotations: tool.annotations,
-}));
+});
 
-const TOOL_BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));
+const activeToolList = (): McpTool[] => activeCatalogue().map(toWireTool);
+const activeToolByName = (): Map<string, ToolDefinition> => new Map(activeCatalogue().map((tool) => [tool.name, tool]));
 
 /**
  * Every uri this server can be read at, with the reader that answers it.
@@ -310,10 +337,10 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   /** Tool execution: a throw is the agent asking for something impossible. */
   const callTool = async (id: RpcId, params: Record<string, unknown>): Promise<JsonRpcResponse> => {
     const name = typeof params.name === "string" ? params.name : "";
-    const tool = TOOL_BY_NAME.get(name);
+    const tool = activeToolByName().get(name);
     if (!tool) {
       return rpcError(id, RPC_ERRORS.invalidParams, `There is no tool called "${name}".`, {
-        availableTools: TOOLS.map((entry) => entry.name),
+        availableTools: activeCatalogue().map((entry) => entry.name),
       });
     }
 
@@ -435,7 +462,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         return rpcResult(id, {});
 
       case "tools/list":
-        return rpcResult(id, { tools: TOOL_LIST });
+        return rpcResult(id, { tools: activeToolList() });
 
       case "tools/call":
         return await callTool(id, params);
@@ -519,7 +546,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         return rpcError(incoming.id, RPC_ERRORS.internal, message);
       }
     },
-    tools: TOOL_LIST,
+    get tools() {
+      return activeToolList();
+    },
     resources: RESOURCE_LIST,
     prompts: PROMPT_LIST,
     state: () => ({ ...state, subscriptions: [...state.subscriptions] }),

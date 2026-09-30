@@ -264,7 +264,7 @@ export default function Timeline() {
                 return (
                   <div
                     key={layer.id}
-                    className="absolute left-0"
+                    className="pointer-events-none absolute left-0"
                     style={{ top: (rowOf.get(layer.id) ?? 0) * ROW_H, height: ROW_H, width: contentWidth }}
                   >
                     <TimelineClip

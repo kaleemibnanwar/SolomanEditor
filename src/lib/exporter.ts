@@ -54,14 +54,13 @@ export function exportSupport() {
 /**
  * The best container for LIVE streaming the composed canvas to ffmpeg.
  *
- * RTMP/FLV only holds H.264 + AAC, so an MP4 recorder (avc1 + mp4a) can be
- * stream-copied straight into the push (`copySafe: true`). A WebM recorder
- * (VP8/VP9 + Opus) must be transcoded on the way out (`copySafe: false`).
+ * Prefer WebM (VP8/9 + Opus): Chrome's software H.264 encoder (OpenH264) cannot
+ * hold 1080p30 in real time and collapses to a crawl (~1.6 fps), which is exactly
+ * YouTube's "not receiving enough video". The VPx encoders keep up; the caller
+ * transcodes to H.264/AAC for RTMP. MP4 (avc1 + mp4a) is the fallback — one
+ * encode with no Opus→AAC hop, but only safe where hardware H.264 is available.
  */
 export function preferredStreamMime(): { mime: string; copySafe: boolean } | null {
-  // Prefer WebM (Matroska) for LIVE streaming: it demuxes reliably from a pipe,
-  // and the caller transcodes it to H.264/AAC for RTMP. Fragmented MP4 from
-  // stdin is the flakier path, kept only as a fallback.
   const webm = firstSupported(WEBM_CANDIDATES);
   if (webm) return { mime: webm, copySafe: false };
   const mp4 = firstSupported(MP4_CANDIDATES);
@@ -76,7 +75,10 @@ function chooseMime(format: ExportOptions["format"]): string {
     return mp4;
   }
   if (format === "webm") return webm ?? "video/webm";
-  return mp4 ?? webm ?? "video/webm";
+  // "auto" prefers WebM (VP8/9): the browser's software H.264 encoder (OpenH264)
+  // cannot hold 1080p30 in real time and would drop frames in a realtime export.
+  // MP4 remains available as an explicit choice where hardware H.264 exists.
+  return webm ?? mp4 ?? "video/webm";
 }
 
 export const extensionFor = (mime: string) => (mime.includes("mp4") ? "mp4" : "webm");
@@ -277,10 +279,6 @@ export async function runExportJob(job: ExportJob) {
     editor().setUi({ exporting: true });
     patch({ status: "preparing", progress: 0, message: "Preparing the renderer…" });
 
-    if (document.hidden) {
-      throw new Error("Keep this tab in the foreground — browsers freeze rendering in background tabs.");
-    }
-
     const state = editorStore.getState();
     const project = state.project;
     const projectW = project.settings.width;
@@ -390,10 +388,6 @@ export async function runExportJob(job: ExportJob) {
       const tick = () => {
         if (canceled.has(id)) {
           reject(new Error("Export canceled."));
-          return;
-        }
-        if (document.hidden) {
-          reject(new Error("Export stopped: the tab went to the background and rendering was suspended."));
           return;
         }
         // Negative during the audio lead-in, so the first frames hold on the

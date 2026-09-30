@@ -187,7 +187,7 @@ type Middleware = (req: IncomingMessage, res: ServerResponse, next: (error?: unk
 function createHandler(): Middleware {
   let nextId = 1;
   let listening = true;
-  let startedAt = Date.now();
+  const startedAt = Date.now();
   let requests = 0;
   let lastRequestAt: number | null = null;
   let lastPollAt = 0;
@@ -246,7 +246,10 @@ function createHandler(): Middleware {
 
     return new Promise((resolve, reject) => {
       const id = nextId++;
-      let timer: ReturnType<typeof setTimeout>;
+      const timer = setTimeout(() => {
+        outstanding.delete(id);
+        reject(new Error(`The editor did not answer within ${Math.round(DISPATCH_TIMEOUT_MS / 1000)}s.`));
+      }, DISPATCH_TIMEOUT_MS);
 
       const entry: PendingRequest = {
         id,
@@ -257,11 +260,6 @@ function createHandler(): Middleware {
           resolve(reply);
         },
       };
-
-      timer = setTimeout(() => {
-        outstanding.delete(id);
-        reject(new Error(`The editor did not answer within ${Math.round(DISPATCH_TIMEOUT_MS / 1000)}s.`));
-      }, DISPATCH_TIMEOUT_MS);
 
       outstanding.set(id, entry);
       deliver(entry);

@@ -20,6 +20,8 @@ export interface Box {
   rotation: number;
   /** scale that produced the size, used by the resize interaction */
   scale: number;
+  scaleX?: number;
+  scaleY?: number;
 }
 
 export interface Point {
@@ -42,7 +44,9 @@ export function evaluatedBox(
   const v = evaluateLayer(layer, t);
   const base = getBaseSize(layer, settings, assets);
   const scale = v.scale || 0.0001;
-  return { cx: v.x, cy: v.y, w: base.width * scale, h: base.height * scale, rotation: v.rotation, scale };
+  const scaleX = v.scaleX !== undefined ? v.scaleX : 1;
+  const scaleY = v.scaleY !== undefined ? v.scaleY : 1;
+  return { cx: v.x, cy: v.y, w: base.width * scale * scaleX, h: base.height * scale * scaleY, rotation: v.rotation, scale, scaleX, scaleY };
 }
 
 export function rotatePoint(p: Point, origin: Point, deg: number): Point {

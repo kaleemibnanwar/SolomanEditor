@@ -255,6 +255,23 @@ export const PROJECT_TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: "delete_template",
+    title: "Delete a saved template",
+    description: "Delete a saved user template by its ID.",
+    inputSchema: object({
+      id: str("The ID of the template to delete (from list_templates).", { minLength: 1 }),
+    }),
+    annotations: WRITE,
+    run: async (args) => {
+      const id = argString(args, "id");
+      if (!id) return toolError("A template id is required.");
+      const existing = await getUserTemplate(id);
+      if (!existing) return toolError(`No user template found with id "${id}".`);
+      await deleteUserTemplate(existing.id);
+      return textResult(`Deleted template "${existing.name}" (${existing.id}).`, { ok: true });
+    },
+  },
+  {
     name: "get_template",
     title: "Get a template's full definition",
     description:

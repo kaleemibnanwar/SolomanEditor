@@ -72,16 +72,20 @@ const ASPECT_ICON = { "16:9": Monitor, "9:16": Smartphone, "1:1": Square } as co
 export function ProjectsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const {
     summaries,
+    userTemplates,
     loading,
     persistent,
     busy,
     currentId,
     createTemplate,
+    openSnapshotTemplate,
     openSaved,
     duplicate,
     remove,
+    removeTemplate,
     saveCurrent,
     saveCopy,
+    saveAsTemplate,
     startNew,
   } = useProjectLibrary(open);
 
@@ -217,6 +221,34 @@ export function ProjectsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               </p>
             )}
           </section>
+
+          {userTemplates.length > 0 && (
+            <section>
+              <div className="mb-2 flex items-baseline gap-2">
+                <h3 className="flex items-center gap-1.5 text-[12px] font-semibold text-km-text">
+                  <LayoutTemplate className="h-3.5 w-3.5 text-purple-400" />
+                  Your templates
+                </h3>
+                <span className="text-[10.5px] text-km-faint">
+                  {userTemplates.length} saved
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {userTemplates.map((template) => (
+                  <UserTemplateCard
+                    key={template.id}
+                    template={template}
+                    busy={busy}
+                    onOpen={() => {
+                      void openSnapshotTemplate(template.id);
+                      onOpenChange(false);
+                    }}
+                    onDelete={() => void removeTemplate(template.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
         <DialogFooter className="shrink-0 gap-2 border-t border-km-border px-5 py-3">
@@ -228,6 +260,16 @@ export function ProjectsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           >
             {busy === "new" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
             New project
+          </Button>
+
+          <Button
+            variant="ghost"
+            onClick={() => void saveAsTemplate()}
+            disabled={working}
+            className="h-8 gap-1.5 border border-km-border px-3 text-[12px] text-km-dim hover:bg-km-raised hover:text-km-text"
+          >
+            <LayoutTemplate className="h-3.5 w-3.5" />
+            Save as template
           </Button>
 
           <Button
@@ -344,6 +386,76 @@ function ProjectCard({
             disabled={busy !== null || current}
             title={current ? "The open project cannot be deleted" : "Delete this project"}
             className="h-6 gap-1 px-2 text-[10.5px] text-km-dim hover:bg-red-500/15 hover:text-red-300 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-km-dim"
+          >
+            <Trash2 className="h-3 w-3" />
+            Delete
+          </Button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * A saved user template
+ * ------------------------------------------------------------------ */
+
+function UserTemplateCard({
+  template,
+  busy,
+  onOpen,
+  onDelete,
+}: {
+  template: import("@/lib/userTemplates").UserTemplate;
+  busy: string | null;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
+  const working = busy?.endsWith(`:${template.id}`) ?? false;
+
+  return (
+    <article className="flex items-start gap-3 rounded-lg border border-km-border bg-km-track/40 p-2.5 transition hover:border-km-border hover:bg-km-raised/60">
+      <div className="relative h-[52px] w-[92px] shrink-0 overflow-hidden rounded border border-km-border bg-black/50">
+        <span
+          className="grid h-full w-full place-items-center"
+          style={swatch(template.project.settings.backgroundKind === "color" ? template.project.settings.backgroundColor ?? "" : template.project.settings.backgroundGradient ?? "")}
+        >
+          <LayoutTemplate className="h-4 w-4 text-white/70" />
+        </span>
+        {working && (
+          <span className="absolute inset-0 grid place-items-center bg-black/60">
+            <Loader2 className="h-4 w-4 animate-spin text-white" />
+          </span>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <h4 className="truncate text-[12.5px] font-semibold text-km-text">{template.name}</h4>
+          <span className="shrink-0 rounded-full border border-purple-400/40 px-1.5 py-0.5 text-[9.5px] text-purple-300">
+            Snapshot
+          </span>
+        </div>
+
+        <p className="mt-0.5 truncate text-[10.5px] text-km-faint">
+          {template.blurb || "A saved project snapshot"} · {template.project.trackIds.length} rows · saved {relativeTime(template.createdAt)}
+        </p>
+
+        <div className="mt-2 flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            onClick={onOpen}
+            disabled={busy !== null}
+            className="h-6 gap-1 px-2 text-[10.5px] text-km-dim hover:bg-km-panel2 hover:text-km-text disabled:opacity-40"
+          >
+            <FolderOpen className="h-3 w-3" />
+            Start from here
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={onDelete}
+            disabled={busy !== null}
+            className="h-6 gap-1 px-2 text-[10.5px] text-km-dim hover:bg-red-500/15 hover:text-red-300 disabled:opacity-40"
           >
             <Trash2 className="h-3 w-3" />
             Delete

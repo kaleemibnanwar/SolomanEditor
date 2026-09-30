@@ -18,16 +18,19 @@ import { planExportedVoices, preferredStreamMime, startExportedVoices, type Sche
 import { resumeAudioContext } from "@/lib/media";
 import { beginMediaCapture, endMediaCapture, isOutputMuted, setOutputMuted } from "@/lib/playback";
 import { orderedLayers, projectDuration } from "@/lib/project";
+import { recommendStreamBitrate } from "@/lib/broadcast";
 import { editor, editorStore } from "@/store/editorStore";
 
 const LEAD = 0.06;
-/** Live pushes want a steady, modest bitrate — not the 12 Mbps of an archive. */
-const STREAM_VIDEO_BPS = 5_000_000;
+/** How often the store's playhead (and the React panels) sync during a live push. */
+const STORE_SYNC_MS = 120;
 
 export interface TimelineBroadcastOptions {
   loop: boolean;
   /** Rows to drop from the broadcast ("specific components" off). */
   hiddenTrackIds?: Set<string>;
+  /** Target video bitrate in bps. Omit for the resolution-aware "auto" value. */
+  videoBitrate?: number;
   onChunk: (chunk: Uint8Array) => void;
   onError: (message: string) => void;
   /** Called exactly once when the capture ends, however it ended. */
@@ -41,8 +44,7 @@ export interface TimelineBroadcastSession {
 export function startTimelineBroadcast(options: TimelineBroadcastOptions): TimelineBroadcastSession {
   const mime = preferredStreamMime();
   if (!mime) {
-    options.onError("This browser cannot record a live stream (no MediaRecorder MP4/WebM support).");
-    return { stop: () => {} };
+    throw new Error("This browser cannot record a live stream (no MediaRecorder MP4/WebM support).");
   }
 
   const wasMuted = isOutputMuted();
@@ -108,8 +110,9 @@ export function startTimelineBroadcast(options: TimelineBroadcastOptions): Timel
   frame.height = projectH;
   const fctx = frame.getContext("2d", { alpha: false });
   if (!fctx) {
-    options.onError("The browser refused to create a render surface.");
-    return { stop: cleanup };
+    // Throwing here (instead of returning a dead session) lets the controller
+    // tear the already-started ffmpeg sinks down before the error surfaces.
+    throw new Error("The browser refused to create a render surface.");
   }
 
   const drawAt = (time: number) => {
@@ -119,8 +122,7 @@ export function startTimelineBroadcast(options: TimelineBroadcastOptions): Timel
   };
 
   if (!frame.captureStream) {
-    options.onError("This browser cannot capture the canvas for streaming.");
-    return { stop: cleanup };
+    throw new Error("This browser cannot capture the canvas for streaming.");
   }
 
   const run = async () => {
@@ -147,24 +149,35 @@ export function startTimelineBroadcast(options: TimelineBroadcastOptions): Timel
     if (audioDest) tracks.push(...audioDest.stream.getAudioTracks());
     const combined = new MediaStream(tracks);
 
+    // The capture and the ffmpeg re-encode share one target bitrate (the caller
+    // passes the same number to both), so the two stages don't fight. Auto is
+    // resolution- and fps-aware, not a flat 5 Mbps that YouTube flags as low.
+    const videoBits = recommendStreamBitrate(projectW, projectH, fps, options.videoBitrate).video;
+
     try {
       recorder = new MediaRecorder(combined, {
         mimeType: mime.mime,
-        videoBitsPerSecond: STREAM_VIDEO_BPS,
+        videoBitsPerSecond: videoBits,
         audioBitsPerSecond: 192_000,
       });
     } catch {
-      recorder = new MediaRecorder(combined, { videoBitsPerSecond: STREAM_VIDEO_BPS, audioBitsPerSecond: 192_000 });
+      recorder = new MediaRecorder(combined, { videoBitsPerSecond: videoBits, audioBitsPerSecond: 192_000 });
     }
 
     // Preserve chunk order: each Blob's bytes resolve in a chained promise.
+    // A rejection is caught inside the chain — one failed arrayBuffer() must not
+    // permanently reject the chain and silently starve ffmpeg.
     let chain: Promise<void> = Promise.resolve();
     recorder.ondataavailable = (event) => {
       if (!event.data.size) return;
-      chain = chain.then(async () => {
-        const buffer = new Uint8Array(await event.data.arrayBuffer());
-        if (!stopped) options.onChunk(buffer);
-      });
+      chain = chain
+        .then(async () => {
+          const buffer = new Uint8Array(await event.data.arrayBuffer());
+          if (!stopped) options.onChunk(buffer);
+        })
+        .catch((error) => {
+          options.onError(`Chunk delivery failed: ${error instanceof Error ? error.message : String(error)}`);
+        });
     };
     recorder.start(250);
 
@@ -185,13 +198,12 @@ export function startTimelineBroadcast(options: TimelineBroadcastOptions): Timel
     };
     scheduleLoop(0);
 
+    let lastSyncAt = 0;
     const tick = () => {
       if (stopped) return;
-      if (document.hidden) {
-        options.onError("Streaming stopped: the tab went to the background.");
-        cleanup();
-        return;
-      }
+      // In Electron with backgroundThrottling: false, requestAnimationFrame continues
+      // running at full speed even when the window is minimized or hidden.
+      // Therefore, we do not need to stop the stream when document.hidden is true.
       const elapsed = (performance.now() - wallStart) / 1000;
       let time: number;
       if (options.loop) {
@@ -205,8 +217,16 @@ export function startTimelineBroadcast(options: TimelineBroadcastOptions): Timel
         }
         time = Math.max(0, elapsed);
       }
-      editor().setCurrentTime(Math.min(time, duration));
       drawAt(time);
+      // The composed frame above is the thing actually going on air; the store's
+      // playhead only exists so the preview and panels follow along. Driving the
+      // whole React tree at 60fps while also composing + encoding is what made a
+      // live push laggy, so the store syncs at a modest cadence instead.
+      const now = performance.now();
+      if (now - lastSyncAt >= STORE_SYNC_MS) {
+        lastSyncAt = now;
+        editor().setCurrentTime(Math.min(time, duration));
+      }
       raf = requestAnimationFrame(tick);
     };
     tick();

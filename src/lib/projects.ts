@@ -159,7 +159,7 @@ export function capturePoster(project: Project, assets: Record<AssetId, Asset>, 
     canvas.height = height;
     const ctx = canvas.getContext("2d");
     if (!ctx) return undefined;
-    drawFrame({ ctx, settings: project.settings, layers, assets, time: posterTime(project) });
+    drawFrame({ ctx, settings: project.settings, layers, assets, time: posterTime(project), animationComplete: true });
 
     const scale = Math.min(1, maxWidth / width);
     const thumb = document.createElement("canvas");

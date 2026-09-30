@@ -93,7 +93,6 @@ export function useStore<T extends object, S>(
     }
     cache.current = { state, value, selector: sel };
     return value;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, isEqual]);
 
   return useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);

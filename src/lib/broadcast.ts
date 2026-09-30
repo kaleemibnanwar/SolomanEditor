@@ -55,6 +55,68 @@ export interface StreamConfig {
   createdAt: number;
 }
 
+/* ------------------------------------------------------------------ *
+ * Live stream bitrate
+ * ------------------------------------------------------------------ */
+
+export interface StreamBitrate {
+  /** Target video bitrate in bits per second. */
+  video: number;
+  /** Peak bitrate (x264 `maxrate`) in bits per second. */
+  maxrate: number;
+  /** VBV buffer size (x264 `bufsize`) in bits. */
+  bufsize: number;
+}
+
+const MBPS = 1_000_000;
+
+/**
+ * The H.264 bitrate ladder, in Mbps, by pixel height. These sit at the *floor* of
+ * each tier's published range (a 1080p30 stream at 6 Mbps is still well above
+ * YouTube's "too low" threshold but a third lighter on the uplink than 8 Mbps),
+ * so several concurrent pushes are sustainable on a modest connection.
+ */
+function bitrateLadder(height: number): { p30: number; p60: number } {
+  if (height >= 2160) return { p30: 27, p60: 35 };
+  if (height >= 1440) return { p30: 12, p60: 16 };
+  if (height >= 1080) return { p30: 6, p60: 9 };
+  if (height >= 720) return { p30: 4, p60: 6 };
+  return { p30: 3, p60: 5 };
+}
+
+/**
+ * The video bitrate a live push should target for a project of the given size
+ * and frame rate, following the same ladder ingest platforms (YouTube, Twitch)
+ * publish. The one number is used both as the MediaRecorder target AND as the
+ * ffmpeg re-encode target, so the capture stage and the push stage never fight
+ * each other — the exact cause of an "encoder output bitrate too low" warning.
+ *
+ * `overrideBps`, when given and positive, wins outright. Omit it (the "auto"
+ * mode) for a resolution- and fps-aware value rather than a flat one-size number.
+ */
+export function recommendStreamBitrate(
+  width: number,
+  height: number,
+  fps: number,
+  overrideBps?: number,
+): StreamBitrate {
+  let video: number;
+  if (overrideBps && overrideBps > 0) {
+    video = Math.round(overrideBps);
+  } else {
+    const ladder = bitrateLadder(height);
+    const mbps = fps >= 50 ? ladder.p60 : ladder.p30;
+    video = Math.round(mbps * MBPS);
+  }
+  // A tight VBV keeps the stream CBR-ish — what live ingest expects — without
+  // starving high-motion frames: peak ~10% over target, buffer ~2s of video.
+  return {
+    video,
+    maxrate: Math.round(video * 1.1),
+    bufsize: Math.round(video * 2),
+  };
+}
+
 export const PLATFORM_DEFAULTS: { platform: string; protocol: StreamProtocol; address: string }[] = [
   { platform: "YouTube", protocol: "rtmps", address: "rtmps://a.rtmps.youtube.com/live2" },
   { platform: "Twitch", protocol: "rtmp", address: "rtmp://live.twitch.tv/app" },

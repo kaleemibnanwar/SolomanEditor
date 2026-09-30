@@ -14,6 +14,8 @@ import { useMemo, useState } from "react";
 import {
   ArrowRight,
   ChevronDown,
+  ClipboardCopy,
+  ClipboardPaste,
   Copy,
   Diamond,
   Eye,
@@ -44,7 +46,7 @@ import {
   ToggleField,
   useHistoryGesture,
 } from "@/components/editor/fields";
-import { layerEnd } from "@/lib/anim";
+import { layerEnd, staticPropValue } from "@/lib/anim";
 import {
   DEFAULT_BOND,
   MIN_BOND_OVERLAP,
@@ -77,6 +79,7 @@ import type {
   Keyframe,
   Layer,
   LayerFilters,
+  StickerStyle,
   TextStyle,
   Transition,
   TransitionDirection,
@@ -124,6 +127,7 @@ const TAB_META: { value: InspectorTab; label: string; show: (layer: Layer) => bo
   { value: "transform", label: "Transform", show: () => true },
   { value: "filters", label: "Filters", show: (l) => l.type !== "audio" },
   { value: "text", label: "Text", show: (l) => l.type === "text" },
+  { value: "sticker", label: "Shape", show: (l) => l.type === "sticker" },
   { value: "transition", label: "Transition", show: () => true },
   { value: "audio", label: "Sound", show: (l) => l.type === "audio" || l.type === "video" },
   { value: "effect", label: "Effect", show: (l) => l.type === "effect" },
@@ -161,6 +165,7 @@ function SingleLayer({ layer }: { layer: Layer }) {
         {active === "transform" && <TransformPanel layer={layer} />}
         {active === "filters" && <FiltersPanel layer={layer} />}
         {active === "text" && <TextPanel layer={layer} />}
+        {active === "sticker" && <StickerPanel layer={layer} />}
         {active === "transition" && <TransitionPanel layer={layer} />}
         {active === "audio" && <AudioPanel layer={layer} />}
         {active === "effect" && <EffectPanel layer={layer} />}
@@ -210,9 +215,15 @@ function LayerHeader({ layer }: { layer: Layer }) {
         </IconButton>
       </div>
 
-      <div className="mt-2 flex items-center gap-1.5">
+      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
         <SmallButton title="Duplicate (Ctrl+D)" onClick={() => editor().duplicateLayers([layer.id])}>
           <Copy className="h-3 w-3" /> Duplicate
+        </SmallButton>
+        <SmallButton title="Copy (Ctrl+C)" onClick={() => editor().copyLayers([layer.id])}>
+          <ClipboardCopy className="h-3 w-3" /> Copy
+        </SmallButton>
+        <SmallButton title="Paste (Ctrl+V)" onClick={() => editor().pasteLayers()}>
+          <ClipboardPaste className="h-3 w-3" /> Paste
         </SmallButton>
         <SmallButton tone="danger" title="Delete (Del)" onClick={() => editor().removeLayers([layer.id])}>
           <Trash2 className="h-3 w-3" /> Delete
@@ -336,15 +347,33 @@ function TransformPanel({ layer }: { layer: Layer }) {
           format={(v) => `${Math.round(v)}°`}
           onChange={(v) => setT({ rotation: v })}
         />
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <NumberField
-            label="Scale value"
+            label="Scale"
             value={layer.transform.scale}
             min={0.02}
             max={8}
             step={0.01}
             {...num((v) => setT({ scale: clamp(v, 0.02, 8) }))}
           />
+          <NumberField
+            label="Stretch X"
+            value={layer.transform.scaleX ?? 1}
+            min={0.01}
+            max={10}
+            step={0.01}
+            {...num((v) => setT({ scaleX: Math.max(0.01, v) }))}
+          />
+          <NumberField
+            label="Stretch Y"
+            value={layer.transform.scaleY ?? 1}
+            min={0.01}
+            max={10}
+            step={0.01}
+            {...num((v) => setT({ scaleY: Math.max(0.01, v) }))}
+          />
+        </div>
+        <div className="mt-2">
           <NumberField
             label="Rotation value"
             value={layer.transform.rotation}
@@ -567,6 +596,44 @@ const FONTS = [
   { value: "Verdana, sans-serif", label: "Verdana" },
 ];
 
+function StickerPanel({ layer }: { layer: Layer }) {
+  const sticker = layer.sticker;
+
+  if (!sticker) {
+    return <EmptyHint>This layer is not a shape.</EmptyHint>;
+  }
+
+  const setSticker = (patch: Partial<StickerStyle>, record = false) =>
+    editor().updateLayer(layer.id, { sticker: { ...sticker, ...patch } }, record);
+
+  return (
+    <>
+      <Section title="Appearance">
+        <ColorField label="Fill color" value={sticker.fill} onChange={(v) => setSticker({ fill: v })} />
+        <ColorField label="Stroke color" value={sticker.stroke} onChange={(v) => setSticker({ stroke: v })} />
+        <SliderField
+          label="Stroke width"
+          value={sticker.strokeWidth}
+          min={0}
+          max={40}
+          step={1}
+          format={(v) => `${Math.round(v)}px`}
+          onChange={(v) => setSticker({ strokeWidth: v })}
+        />
+        <SliderField
+          label="Inner depth"
+          value={sticker.depth}
+          min={0}
+          max={1}
+          step={0.01}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onChange={(v) => setSticker({ depth: v })}
+        />
+      </Section>
+    </>
+  );
+}
+
 function TextPanel({ layer }: { layer: Layer }) {
   const gesture = useHistoryGesture(800);
   const text = layer.text;
@@ -595,6 +662,17 @@ function TextPanel({ layer }: { layer: Layer }) {
       </Section>
 
       <Section title="Type">
+        <SelectField 
+          label="Animation" 
+          value={text.animation || "none"} 
+          options={[
+            { value: "none", label: "None" },
+            { value: "typing", label: "Typing" },
+            { value: "marquee", label: "Marquee" },
+            { value: "slideUp", label: "Slide Up" },
+          ]} 
+          onChange={(v) => setText({ animation: v as "none" | "typing" | "marquee" | "slideUp" }, true)} 
+        />
         <SelectField label="Font" value={text.fontFamily} options={FONTS} onChange={(v) => setText({ fontFamily: v }, true)} />
         <SliderField
           label="Size"
@@ -827,6 +905,7 @@ function TransitionPicker({ value, onChange }: { value: Transition; onChange: (t
  */
 function TransitionPanel({ layer }: { layer: Layer }) {
   const project = useEditor((s) => s.project);
+  const gesture = useHistoryGesture();
 
   /**
    * The joins on this clip's own track, indexed by clip, so each edge can ask
@@ -851,7 +930,7 @@ function TransitionPanel({ layer }: { layer: Layer }) {
         const transition = edge === "in" ? layer.transitionIn : layer.transitionOut;
         const def = transitionDef(transition.type);
         const params = def?.params ?? [];
-        const set = (patch: Partial<Transition>) => editor().setTransition(layer.id, edge, patch);
+        const set = (patch: Partial<Transition>, record = true) => editor().setTransition(layer.id, edge, patch, record);
         const maxDuration = Math.max(0.1, layer.duration / 2);
         // "none" and "cut" are instants — the ramp never runs, so its controls go quiet.
         const ramps = transition.type !== "none" && transition.type !== "cut";
@@ -874,7 +953,11 @@ function TransitionPanel({ layer }: { layer: Layer }) {
               step={0.05}
               format={(v) => `${v.toFixed(2)}s`}
               disabled={!ramps}
-              onChange={(v) => set({ duration: v })}
+              onChange={(v) => {
+                gesture.begin();
+                set({ duration: v }, false);
+              }}
+              onCommit={() => gesture.end()}
             />
 
             {ramps && def?.directional && (
@@ -894,7 +977,11 @@ function TransitionPanel({ layer }: { layer: Layer }) {
                 max={1}
                 step={0.01}
                 format={(v) => `${Math.round(v * 100)}%`}
-                onChange={(v) => set({ softness: v })}
+                onChange={(v) => {
+                  gesture.begin();
+                  set({ softness: v }, false);
+                }}
+                onCommit={() => gesture.end()}
               />
             )}
 
@@ -906,7 +993,11 @@ function TransitionPanel({ layer }: { layer: Layer }) {
                 max={2}
                 step={0.01}
                 format={(v) => `${Math.round(v * 100)}%`}
-                onChange={(v) => set({ intensity: v })}
+                onChange={(v) => {
+                  gesture.begin();
+                  set({ intensity: v }, false);
+                }}
+                onCommit={() => gesture.end()}
               />
             )}
 
@@ -914,7 +1005,11 @@ function TransitionPanel({ layer }: { layer: Layer }) {
               <ColorField
                 label="Colour"
                 value={transition.color ?? "#ffffff"}
-                onChange={(v) => set({ color: v })}
+                onChange={(v) => {
+                  gesture.begin();
+                  set({ color: v }, false);
+                }}
+                onCommit={() => gesture.end()}
               />
             )}
 
@@ -1141,10 +1236,12 @@ function AudioPanel({ layer }: { layer: Layer }) {
           format={(v) => `${Math.round(v * 100)}%`}
           onChange={(v) => set({ volume: v })}
         />
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 flex-wrap">
           <SmallButton onClick={() => set({ volume: 1 }, true)}>100%</SmallButton>
           <SmallButton onClick={() => set({ volume: 0.6 }, true)}>-4 dB</SmallButton>
           <SmallButton onClick={() => set({ volume: 0 }, true)}>Silence</SmallButton>
+          <SmallButton onClick={() => set({ volume: Math.max(0, layer.volume - 0.1) }, true)}>-10%</SmallButton>
+          <SmallButton onClick={() => set({ volume: Math.min(2, layer.volume + 0.1) }, true)}>+10%</SmallButton>
         </div>
       </Section>
 
@@ -1271,6 +1368,8 @@ function EffectPanel({ layer }: { layer: Layer }) {
 const PROP_META: Record<AnimatableProp, { label: string; step: number }> = {
   opacity: { label: "Opacity", step: 0.01 },
   scale: { label: "Scale", step: 0.01 },
+  scaleX: { label: "Scale X", step: 0.01 },
+  scaleY: { label: "Scale Y", step: 0.01 },
   rotation: { label: "Rotation", step: 1 },
   x: { label: "X", step: 1 },
   y: { label: "Y", step: 1 },
@@ -1333,7 +1432,7 @@ function KeyframesPanel({ layer }: { layer: Layer }) {
         <div className="space-y-1">
           {props.map((prop) => {
             const has = !!keyAt(prop);
-            const value = layer[prop] as number;
+            const value = staticPropValue(layer, prop);
             return (
               <button
                 key={prop}
@@ -1457,9 +1556,15 @@ function MultiPanel({ layers }: { layers: Layer[] }) {
       <PanelTitle title={`${layers.length} layers selected`} hint="shift-click to add" />
 
       <div className="shrink-0 border-b border-km-border px-3 pb-3">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <SmallButton title="Duplicate all (Ctrl+D)" onClick={() => editor().duplicateLayers(ids)}>
             <Copy className="h-3 w-3" /> Duplicate
+          </SmallButton>
+          <SmallButton title="Copy all (Ctrl+C)" onClick={() => editor().copyLayers(ids)}>
+            <ClipboardCopy className="h-3 w-3" /> Copy
+          </SmallButton>
+          <SmallButton title="Paste (Ctrl+V)" onClick={() => editor().pasteLayers()}>
+            <ClipboardPaste className="h-3 w-3" /> Paste
           </SmallButton>
           <SmallButton tone="danger" title="Delete all (Del)" onClick={() => editor().removeLayers(ids)}>
             <Trash2 className="h-3 w-3" /> Delete

@@ -10,7 +10,7 @@
  * so undoing never fights with scrubbing.
  */
 import { shallowArrayEqual, createStore, useStore, type StoreApi } from "@/store/createStore";
-import { NEUTRAL_FILTERS, NEUTRAL_GRADE, layerEnd } from "@/lib/anim";
+import { NEUTRAL_FILTERS, NEUTRAL_GRADE, layerEnd, staticPropValue } from "@/lib/anim";
 import { FILTER_LOOK_BY_ID, lookValues, type BackgroundPreset } from "@/lib/library";
 import {
   MIN_LAYER_DURATION,
@@ -127,6 +127,8 @@ export interface EditorActions {
   renameLayer: (id: LayerId, name: string) => void;
   removeLayers: (ids: LayerId[]) => void;
   duplicateLayers: (ids: LayerId[]) => void;
+  copyLayers: (ids: LayerId[]) => void;
+  pasteLayers: () => void;
 
   setLayerStart: (id: LayerId, startTime: number, record?: boolean) => void;
   setLayersStart: (moves: [LayerId, number][], record?: boolean) => void;
@@ -135,7 +137,7 @@ export interface EditorActions {
   reorderLayer: (id: LayerId, targetIndex: number) => void;
   nudgeLayerZ: (id: LayerId, direction: "up" | "down" | "top" | "bottom") => void;
   splitAtPlayhead: () => number;
-  setTransition: (id: LayerId, edge: "in" | "out", patch: Partial<Transition>) => void;
+  setTransition: (id: LayerId, edge: "in" | "out", patch: Partial<Transition>, recordChange?: boolean) => void;
   /** Applies a transition to every selected layer, on the edge the library is pointed at. */
   applyTransition: (type: TransitionType, patch?: Partial<Transition>) => void;
   /** Joins two touching clips on one track with a transition bond. */
@@ -149,7 +151,7 @@ export interface EditorActions {
   renameTrack: (id: TrackId, name: string) => void;
   removeTrack: (id: TrackId) => void;
   setMainTrack: (id: TrackId) => void;
-  moveLayerToTrack: (layerId: LayerId, trackId: TrackId) => void;
+  moveLayerToTrack: (layerId: LayerId, trackId: TrackId, recordChange?: boolean) => void;
   /** Reorders a whole row forward/backward in the drawing stack (the main layer stays at the back). */
   nudgeTrackZ: (trackId: TrackId, direction: "up" | "down" | "top" | "bottom") => void;
 
@@ -207,6 +209,7 @@ const initialState: EditorState = {
   history: { past: [], future: [] },
   lastAction: "New project",
   ui: {
+    mode: "edit",
     libraryTab: "media",
     libraryQuery: "",
     inspectorTab: "transform",
@@ -224,6 +227,7 @@ const initialState: EditorState = {
   },
   exportJobs: [],
   voiceoverJobs: [],
+  clipboard: [],
 };
 
 /* ------------------------------------------------------------------ *
@@ -524,6 +528,35 @@ export const editorStore: StoreApi<EditorStoreState> = createStore<EditorStoreSt
       if (created.length) set({ selection: created });
     },
 
+    copyLayers: (ids) => {
+      const st = get();
+      const layers = ids.map((id) => st.project.layers[id]).filter(Boolean);
+      set({ clipboard: layers });
+    },
+
+    pasteLayers: () => {
+      const st = get();
+      const layers = st.clipboard;
+      if (!layers.length) return;
+      const created: LayerId[] = [];
+      mutate((p) => {
+        let next = p;
+        for (const layer of layers) {
+          const copy: Layer = {
+            ...layer,
+            id: uid("layer"),
+            startTime: st.currentTime,
+            trackId: "",
+            keyframes: layer.keyframes.map((k) => ({ ...k, id: uid("kf") })),
+          };
+          created.push(copy.id);
+          next = insertLayer(next, copy);
+        }
+        return next;
+      }, "Paste layer");
+      if (created.length) set({ selection: created });
+    },
+
     setLayerStart: (id, startTime, recordChange = true) =>
       mutate(
         (p) => {
@@ -662,13 +695,13 @@ export const editorStore: StoreApi<EditorStoreState> = createStore<EditorStoreSt
       return targets.length;
     },
 
-    setTransition: (id, edge, patch) =>
+    setTransition: (id, edge, patch, recordChange = true) =>
       mutate((p) => {
         const layer = p.layers[id];
         if (!layer) return p;
         const key = edge === "in" ? "transitionIn" : "transitionOut";
         return patchLayer(p, id, { [key]: { ...layer[key], ...patch } } as Partial<Layer>);
-      }, "Transition"),
+      }, "Transition", recordChange),
 
     applyTransition: (type, patch) =>
       mutate(
@@ -727,7 +760,8 @@ export const editorStore: StoreApi<EditorStoreState> = createStore<EditorStoreSt
 
     setMainTrack: (id) => mutate((p) => setMainTrackIn(p, id), "Set main layer"),
 
-    moveLayerToTrack: (layerId, trackId) => mutate((p) => moveLayerToTrackIn(p, layerId, trackId), "Move to track"),
+    moveLayerToTrack: (layerId, trackId, recordChange = true) =>
+      mutate((p) => moveLayerToTrackIn(p, layerId, trackId), "Move to track", recordChange),
 
     nudgeTrackZ: (trackId, direction) =>
       mutate((p) => {
@@ -922,7 +956,7 @@ export const editorStore: StoreApi<EditorStoreState> = createStore<EditorStoreSt
 
 function currentPropValue(layer: Layer, prop: AnimatableProp, localTime: number): number {
   const keys = layer.keyframes.filter((k) => k.prop === prop).sort((a, b) => a.time - b.time);
-  if (!keys.length) return layer[prop] as number;
+  if (!keys.length) return staticPropValue(layer, prop);
   if (localTime <= keys[0].time) return keys[0].value;
   const last = keys[keys.length - 1];
   if (localTime >= last.time) return last.value;
@@ -934,7 +968,7 @@ function currentPropValue(layer: Layer, prop: AnimatableProp, localTime: number)
       return a.value + (b.value - a.value) * t;
     }
   }
-  return layer[prop] as number;
+  return staticPropValue(layer, prop);
 }
 
 /* ------------------------------------------------------------------ *

@@ -273,8 +273,9 @@ function registerBroadcastIpc() {
   ipcMain.handle("octo-cut:broadcast:probe", () => broadcaster.probe());
   ipcMain.handle("octo-cut:broadcast:status", () => broadcaster.status());
   ipcMain.handle("octo-cut:broadcast:start", (_event, payload) => broadcaster.start(payload ?? {}));
-  ipcMain.handle("octo-cut:broadcast:stop", () => broadcaster.stop());
-  // Timeline broadcasts stream MediaRecorder chunks here, forwarded to ffmpeg's stdin.
+  // No id → stop every session; an id → stop that one push.
+  ipcMain.handle("octo-cut:broadcast:stop", (_event, id) => broadcaster.stop(id));
+  // Timeline broadcasts stream MediaRecorder chunks here, fanned out to ffmpeg's stdin.
   ipcMain.on("octo-cut:broadcast:chunk", (_event, chunk) => broadcaster.writeChunk(chunk));
 }
 
@@ -350,6 +351,150 @@ function registerWindowControlsIpc() {
   });
   ipcMain.handle("octo-cut:window:close", (event) => windowOf(event)?.close());
   ipcMain.handle("octo-cut:window:isMaximized", (event) => windowOf(event)?.isMaximized() ?? false);
+}
+
+/* ------------------------------------------------------------------ *
+ * System Stats
+ * ------------------------------------------------------------------ */
+const os = require("node:os");
+const { execFile } = require("node:child_process");
+
+let lastCpuInfo = os.cpus();
+
+function getCpuUsage() {
+  const current = os.cpus();
+  let idleDelta = 0;
+  let totalDelta = 0;
+
+  for (let i = 0; i < current.length; i++) {
+    const prev = lastCpuInfo[i]?.times || { user: 0, nice: 0, sys: 0, idle: 0, irq: 0 };
+    const curr = current[i].times;
+
+    const prevTotal = prev.user + prev.nice + prev.sys + prev.idle + prev.irq;
+    const currTotal = curr.user + curr.nice + curr.sys + curr.idle + curr.irq;
+    
+    totalDelta += currTotal - prevTotal;
+    idleDelta += curr.idle - prev.idle;
+  }
+  
+  lastCpuInfo = current;
+  if (totalDelta === 0) return 0;
+  return 100 - (100 * idleDelta / totalDelta);
+}
+
+function getGpuUsage() {
+  return new Promise((resolve) => {
+    execFile("nvidia-smi", ["--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"], { timeout: 1000 }, (err, stdout) => {
+      if (err) return resolve(-1);
+      const val = parseInt(stdout, 10);
+      resolve(isNaN(val) ? -1 : val);
+    });
+  });
+}
+
+function registerSystemIpc() {
+  ipcMain.handle("octo-cut:system:stats", async () => {
+    const memory = process.getSystemMemoryInfo();
+    const percentCPUUsage = getCpuUsage();
+    const gpuUsage = await getGpuUsage();
+    
+    // Quick latency test to YouTube's homepage
+    const start = performance.now();
+    let ping = -1;
+    try {
+      await fetch("https://www.youtube.com", { method: "HEAD", signal: AbortSignal.timeout(3000) });
+      ping = performance.now() - start;
+    } catch {}
+
+    return {
+      memory: {
+        total: memory.total,
+        free: memory.free,
+        used: memory.total - memory.free,
+      },
+      cpu: {
+        percentCPUUsage,
+      },
+      gpu: gpuUsage,
+      ping,
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Auto-update
+ *
+ * `electron-updater` checks the public release repo (see `publish` in
+ * `electron-builder.yml`) for a newer build and downloads it in the background.
+ * The renderer only needs to know "an update is ready" so it can offer a
+ * restart, hence one narrow status shape and three verbs. The updater exists
+ * only in a packaged build; in dev there is nothing to update to, so the whole
+ * thing stays inert and the renderer never shows a badge.
+ * ------------------------------------------------------------------ */
+
+/** How often to ask the release feed for a newer build. */
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000; // hourly
+
+/** `null` where auto-update does not apply (dev, or the module is missing). */
+let autoUpdater = null;
+
+/** The last status broadcast, also returned synchronously by `update:status`. */
+let updateState = { status: "idle", version: null, percent: 0 };
+
+function setUpdateState(patch) {
+  updateState = { ...updateState, ...patch };
+  broadcast("octo-cut:update:status", updateState);
+}
+
+function loadAutoUpdater() {
+  if (autoUpdater) return autoUpdater;
+  // Auto-update is macOS + Windows only: electron-updater has no Linux installer
+  // path, so on Linux the app is installed manually from the release page.
+  if (!app.isPackaged) return null;
+  if (process.platform !== "darwin" && process.platform !== "win32") return null;
+  try {
+    ({ autoUpdater } = require("electron-updater"));
+  } catch (error) {
+    console.error(`[octo-cut] electron-updater is not available — ${error?.message ?? error}`);
+    return null;
+  }
+  return autoUpdater;
+}
+
+function registerUpdateIpc() {
+  ipcMain.handle("octo-cut:update:status", () => updateState);
+  ipcMain.handle("octo-cut:update:check", () => {
+    const updater = loadAutoUpdater();
+    return updater ? updater.checkForUpdates().catch(() => null) : null;
+  });
+  ipcMain.handle("octo-cut:update:download", () => {
+    const updater = loadAutoUpdater();
+    return updater ? updater.downloadUpdate().catch(() => null) : null;
+  });
+  ipcMain.handle("octo-cut:update:install", () => {
+    const updater = loadAutoUpdater();
+    if (!updater) return;
+    setUpdateState({ status: "installing" });
+    updater.quitAndInstall();
+  });
+}
+
+function startAutoUpdater() {
+  const updater = loadAutoUpdater();
+  if (!updater) return;
+
+  updater.on("checking-for-update", () => setUpdateState({ status: "checking" }));
+  updater.on("update-available", (info) => setUpdateState({ status: "available", version: info?.version ?? null }));
+  updater.on("update-not-available", () => setUpdateState({ status: "idle", version: null, percent: 0 }));
+  updater.on("download-progress", (progress) => setUpdateState({ status: "downloading", percent: Math.round(progress?.percent ?? 0) }));
+  updater.on("update-downloaded", (info) => setUpdateState({ status: "downloaded", version: info?.version ?? null, percent: 100 }));
+  updater.on("error", (error) => {
+    console.error(`[octo-cut] auto-update failed — ${error?.message ?? error}`);
+    setUpdateState({ status: "error" });
+  });
+
+  updater.checkForUpdates().catch(() => {});
+  setInterval(() => updater.checkForUpdates().catch(() => {}), UPDATE_CHECK_INTERVAL_MS);
 }
 
 /* ------------------------------------------------------------------ *
@@ -542,6 +687,8 @@ app.whenReady().then(async () => {
   attempt("the media IPC channel", registerMediaIpc);
   attempt("the broadcast IPC channels", registerBroadcastIpc);
   attempt("the window-control IPC channels", registerWindowControlsIpc);
+  attempt("the system IPC channels", registerSystemIpc);
+  attempt("the update IPC channels", registerUpdateIpc);
 
   if (!useDevServer) {
     try {
@@ -558,6 +705,9 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+
+  // Auto-update only runs in a packaged build; `startAutoUpdater` no-ops in dev.
+  attempt("auto-update", startAutoUpdater);
 
   /**
    * Open the listener without waiting to be asked. The point of the URL is that

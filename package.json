@@ -12,6 +12,10 @@
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kaleemibnanwar/octocut-source.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -22,11 +26,13 @@
     "electron:start": "pnpm build && node electron/launch.cjs .",
     "electron:build:dir": "pnpm build && electron-builder --dir",
     "electron:build": "pnpm build && electron-builder",
-    "electron:build:linux": "pnpm build && electron-builder --linux deb --x64"
+    "electron:build:linux": "pnpm build && electron-builder --linux deb --x64",
+    "release": "pnpm build && electron-builder --publish always"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
     "@huggingface/transformers": "^3.8.1",
+    "@microsoft/clarity": "^1.0.2",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-aspect-ratio": "^1.1.0",
@@ -59,6 +65,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
+    "electron-updater": "^6.8.9",
     "embla-carousel-react": "^8.3.0",
     "input-otp": "^1.2.4",
     "kokoro-js": "^1.2.1",

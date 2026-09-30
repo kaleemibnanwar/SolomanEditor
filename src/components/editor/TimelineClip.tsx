@@ -143,27 +143,34 @@ export default function TimelineClip({
       const dt = (ev.clientX - drag.startX) / pps;
 
       if (drag.kind === "move") {
-        if (Math.abs(ev.clientX - drag.startX) < 2) return;
-        const primary = drag.origins.find((o) => o.id === layer.id) ?? drag.origins[0];
-        const raw = Math.max(0, primary.startTime + dt);
-        const tol = SNAP_PX / pps;
-        const startSnap = snapValue(raw, drag.targets, tol);
-        const endSnap = snapValue(raw + layer.duration, drag.targets, tol);
-        const startDist = startSnap.target === null ? Infinity : Math.abs(startSnap.value - raw);
-        const endDist = endSnap.target === null ? Infinity : Math.abs(endSnap.value - (raw + layer.duration));
-        let next =
-          startDist <= endDist ? startSnap.value : endSnap.value - layer.duration;
-        next = Math.max(0, snapToFrame(next, fps));
-        const delta = next - primary.startTime;
-        recordOnce();
-        editor().setLayersStart(
-          drag.origins.map((o) => [o.id, o.startTime + delta]),
-          false,
-        );
+        const dx = ev.clientX - drag.startX;
+        const dy = ev.clientY - drag.startY;
 
-        // vertical drag moves the clip to another track
-        const rows = Math.round((ev.clientY - drag.startY) / rowHeight);
+        // Horizontal movement shifts the clip(s) along the timeline.
+        if (Math.abs(dx) >= 2) {
+          const primary = drag.origins.find((o) => o.id === layer.id) ?? drag.origins[0];
+          const raw = Math.max(0, primary.startTime + dt);
+          const tol = SNAP_PX / pps;
+          const startSnap = snapValue(raw, drag.targets, tol);
+          const endSnap = snapValue(raw + layer.duration, drag.targets, tol);
+          const startDist = startSnap.target === null ? Infinity : Math.abs(startSnap.value - raw);
+          const endDist = endSnap.target === null ? Infinity : Math.abs(endSnap.value - (raw + layer.duration));
+          let next =
+            startDist <= endDist ? startSnap.value : endSnap.value - layer.duration;
+          next = Math.max(0, snapToFrame(next, fps));
+          const delta = next - primary.startTime;
+          recordOnce();
+          editor().setLayersStart(
+            drag.origins.map((o) => [o.id, o.startTime + delta]),
+            false,
+          );
+        }
+
+        // Vertical drag moves the clip to another track — independent of any
+        // horizontal movement, so a clean vertical drag alone works.
+        const rows = Math.round(dy / rowHeight);
         if (rows !== 0) {
+          recordOnce();
           const targetRow = clamp(drag.rowIndex + rows, 0, Math.max(0, rowCount - 1));
           // Read the live project rather than the pointerdown snapshot: this
           // gesture may already have moved the clip once, and the snapshot is
@@ -172,7 +179,7 @@ export default function TimelineClip({
           const current = live.layers[layer.id];
           const track = trackAtRow(live, targetRow);
           if (track && current && current.trackId !== track.id) {
-            editor().moveLayerToTrack(layer.id, track.id);
+            editor().moveLayerToTrack(layer.id, track.id, false);
           }
           drag.rowIndex = targetRow;
           drag.startY = ev.clientY;
@@ -287,7 +294,7 @@ export default function TimelineClip({
       tabIndex={-1}
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
-      className={`group absolute top-1 overflow-hidden rounded-md border transition-shadow ${
+      className={`group pointer-events-auto absolute top-1 overflow-hidden rounded-md border transition-shadow ${
         selected ? "border-km-accent shadow-[0_0_0_1px_rgba(59,130,246,0.7)]" : "border-black/40"
       } ${dimmed ? "opacity-45" : ""}`}
       style={{

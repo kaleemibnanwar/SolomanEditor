@@ -117,7 +117,7 @@ function ExportPanel({ onClose }: { onClose: () => void }) {
 
   const formatOptions = useMemo(() => {
     const options: { value: ExportOptions["format"]; label: string }[] = [
-      { value: "auto", label: `Automatic (${support.mp4 ? "MP4" : support.webm ? "WebM" : "none"})` },
+      { value: "auto", label: `Automatic (${support.webm ? "WebM" : support.mp4 ? "MP4" : "none"})` },
     ];
     if (support.mp4) options.push({ value: "mp4", label: "MP4 · H.264" });
     if (support.webm) options.push({ value: "webm", label: "WebM · VP9" });

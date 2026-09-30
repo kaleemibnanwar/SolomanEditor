@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { resumeAudioContext } from "@/lib/media";
 import { setOutputMuted } from "@/lib/playback";
 import { editor, editorStore, timelineDuration } from "@/store/editorStore";
+import type { Layer } from "@/types/editor";
 
 const TYPING_TAGS = ["INPUT", "TEXTAREA", "SELECT"];
 
@@ -30,6 +31,17 @@ export function useEditorShortcuts({ onExport, onSave }: ShortcutOptions = {}) {
       const mod = e.metaKey || e.ctrlKey;
       const st = editorStore.getState();
 
+      // The edit surface owns the timeline shortcuts. In image/broadcast mode the
+      // Stage/Timeline are unmounted, and while a dialog is open the keys would
+      // silently mutate a project the user can't see.
+      if (st.ui.mode !== "edit") return;
+      if (
+        typeof document !== "undefined" &&
+        document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]')
+      ) {
+        return;
+      }
+
       /* ---- modifier combos ---- */
       if (mod) {
         switch (e.key.toLowerCase()) {
@@ -45,6 +57,16 @@ export function useEditorShortcuts({ onExport, onSave }: ShortcutOptions = {}) {
           case "d":
             e.preventDefault();
             if (st.selection.length) editor().duplicateLayers(st.selection);
+            return;
+          case "c":
+            e.preventDefault();
+            if (st.selection.length) {
+              editor().copyLayers(st.selection);
+            }
+            return;
+          case "v":
+            e.preventDefault();
+            editor().pasteLayers();
             return;
           case "a":
             e.preventDefault();

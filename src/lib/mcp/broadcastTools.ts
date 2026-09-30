@@ -14,7 +14,6 @@
  * and protocol.
  */
 import {
-  ingestUrl,
   listStreamConfigs,
   getStreamConfig,
   saveStreamConfig,
@@ -24,9 +23,9 @@ import {
   STREAM_PLATFORMS,
   type StreamConfig,
 } from "@/lib/broadcast";
-import { broadcastBridge, NO_BROADCAST_STATUS, type BroadcastStatus } from "@/lib/broadcastHost";
-import { startTimelinePush, stopTimelinePush } from "@/lib/broadcastController";
-import { READ, WRITE, argBool, argString, argStringList, bool, choice, need, object, str, strList, type ToolDefinition } from "@/lib/mcp/kit";
+import { broadcastBridge, type BroadcastStatus } from "@/lib/broadcastHost";
+import { startSourcePush, startTimelinePush, stopTimelinePush } from "@/lib/broadcastController";
+import { READ, WRITE, argBool, argNumber, argString, argStringList, bool, choice, need, num, object, str, strList, type ToolDefinition } from "@/lib/mcp/kit";
 import { textResult, toolError } from "@/lib/mcp/protocol";
 import { orderedLayers } from "@/lib/project";
 import { editor } from "@/store/editorStore";
@@ -36,18 +35,18 @@ const PROTOCOL_IDS = STREAM_PROTOCOLS.map((p) => p.value);
 const lineFor = (config: StreamConfig): string =>
   `  "${config.id}" — ${config.name} (${config.protocol.toUpperCase()}, ${config.platform ?? "no platform"}) → ${maskIngestUrl(config)}`;
 
-function statusLines(status: BroadcastStatus): string[] {
+function statusLines(sessions: BroadcastStatus[]): string[] {
+  if (!sessions.length) return ["  · nothing is being pushed right now"];
   const lines: string[] = [];
-  if (status.running) {
-    lines.push(
-      `  · pushing "${status.label}" over ${(status.protocol ?? "").toUpperCase()}${status.loop ? " (looping)" : ""}${status.transcode ? ", transcoding" : ", stream-copy"}`,
-    );
-    if (status.time) lines.push(`  · source time ${status.time}${status.bitrate ? ` · ${status.bitrate}` : ""}${status.speed ? ` · ${status.speed}` : ""}${status.fps ? ` · ${status.fps} fps` : ""}`);
-    lines.push(`  · up ${Math.floor(status.uptime / 60)}m ${status.uptime % 60}s`);
-  } else {
-    lines.push("  · nothing is being pushed right now");
+  for (const s of sessions) {
+    if (s.running) {
+      lines.push(`  · "${s.label}" → ${(s.protocol ?? "").toUpperCase()}${s.loop ? " (looping)" : ""}${s.transcode ? ", transcoding" : ", stream-copy"}`);
+      const detail = [s.time && `t ${s.time}`, s.bitrate, s.speed, s.fps && `${s.fps} fps`].filter(Boolean).join(" · ");
+      lines.push(`    · ${detail || "starting…"} · up ${Math.floor(s.uptime / 60)}m ${s.uptime % 60}s`);
+    } else {
+      lines.push(`  · "${s.label ?? "stream"}" stopped${s.error ? ` — ${s.error}` : ""}`);
+    }
   }
-  if (status.error) lines.push(`  ! ${status.error}`);
   return lines;
 }
 
@@ -174,16 +173,16 @@ export const BROADCAST_TOOLS: ToolDefinition[] = [
       if (!bridge) {
         return textResult(
           "Broadcasting is not available here — it needs the desktop app and ffmpeg (a browser cannot open an RTMP/SRT socket). Stream configs still save and list.",
-          { available: false, ...NO_BROADCAST_STATUS },
+          { available: false, running: false, sessions: [] },
         );
       }
-      const [probe, status] = await Promise.all([bridge.probe(), bridge.status()]);
+      const [probe, sessions] = await Promise.all([bridge.probe(), bridge.status()]);
       return textResult(
         [
           `ffmpeg: ${probe.available ? `available (${probe.version})` : "NOT installed — set FFMPEG_PATH or install ffmpeg"}`,
-          ...statusLines(status),
+          ...statusLines(sessions),
         ].join("\n"),
-        { available: probe.available, ffmpeg: probe.version, ...status },
+        { available: probe.available, ffmpeg: probe.version, running: sessions.some((s) => s.running), sessions },
       );
     },
   },
@@ -191,44 +190,54 @@ export const BROADCAST_TOOLS: ToolDefinition[] = [
     name: "start_broadcast",
     title: "Broadcast live",
     description:
-      "Push to a saved stream config via ffmpeg. Two sources: a `file` (local path) or `url` re-streamed as-is, or `timeline: true` to broadcast the COMPOSED editor timeline live — every layer, headline, sticker and effect, with the playhead looping the whole piece. `loop` repeats until stopped; `transcode` re-encodes to H.264/AAC. The key is never echoed. Poll broadcast_status.",
+      "Push to one or more saved stream configs via ffmpeg — `configs` takes a list so the same feed (a file, a URL, or the composed timeline) can go to YouTube AND Facebook at once. Sources: `file` (local path) or `url` re-streamed as-is, or `timeline: true` to broadcast the composed timeline live. `loop` repeats until stopped; `transcode` re-encodes to H.264/AAC. `video_bitrate` sets the target in bits per second — omit it for a resolution- and fps-aware auto value (the fix for a 'bitrate too low' warning). The key is never echoed. Poll broadcast_status.",
     inputSchema: object(
       {
-        config: str("The stream config id or name from list_stream_configs."),
+        config: str("A single stream config id or name from list_stream_configs."),
+        configs: strList("One or more stream config ids/names to push the same feed to at once."),
         file: str("Local path to the video file to stream (ignored when timeline is true)."),
         url: str("An http(s) URL to the video to stream (ignored when timeline is true)."),
         timeline: bool("Broadcast the composed timeline instead of a file/URL. Defaults to false."),
         loop: bool("Keep looping until stopped. Defaults to false for files, true for the timeline."),
         transcode: bool("Re-encode to H.264/AAC. Defaults to true — live ingest (YouTube) rejects other codecs."),
+        video_bitrate: num("Target video bitrate in bits per second. Omit for auto (resolution + fps)."),
         hidden_tracks: strList("Track ids to drop from a timeline broadcast — see list_timeline_rows."),
       },
-      ["config"],
+      [],
     ),
     annotations: WRITE,
     run: async (args) => {
       const bridge = broadcastBridge();
       if (!bridge) return toolError("Broadcasting needs the desktop app and ffmpeg — a browser cannot open an RTMP/SRT socket.");
 
-      const config = await getStreamConfig(need(args, "config"));
-      if (!config) return toolError("No stream config by that id or name — list_stream_configs shows them.");
+      const single = argString(args, "config");
+      const list = argStringList(args, "configs");
+      const configIds = list?.length ? list : single ? [single] : [];
+      if (!configIds.length) {
+        return toolError("start_broadcast needs `config` or `configs` — the stream config id(s)/name(s) from list_stream_configs.");
+      }
+
+      const videoBitrate = argNumber(args, "video_bitrate");
 
       if (argBool(args, "timeline") ?? false) {
         const loop = argBool(args, "loop") ?? true;
         const hidden = argStringList(args, "hidden_tracks");
-        const result = await startTimelinePush(config.id, {
+        const result = await startTimelinePush(configIds, {
           loop,
           transcode: argBool(args, "transcode") ?? false,
           hiddenTrackIds: hidden ? new Set(hidden) : undefined,
+          videoBitrate,
         });
-        const status = await bridge.status();
+        const sessions = await bridge.status();
         return textResult(
           [
-            `Broadcasting the timeline as "${result.configName}" → ${result.protocol.toUpperCase()}.`,
+            `Broadcasting the timeline to ${result.started.length} destination(s): ${result.started.map((t) => t.configName).join(", ")}.`,
             `  · every layer is composed${result.copySafe ? " — H.264/AAC, stream-copied" : " — VP8/9, transcoded to H.264/AAC"}`,
+            `  · target bitrate ${videoBitrate ? `${Math.round(videoBitrate / 1000)} kbps` : "auto (resolution + fps)"}`,
             loop ? "  · looping the whole piece" : "  · single pass",
-            ...statusLines(status),
+            ...statusLines(sessions),
           ].join("\n"),
-          { ok: true, configId: config.id, name: config.name, protocol: config.protocol, timeline: true, ...status },
+          { ok: true, timeline: true, started: result.started, running: sessions.some((s) => s.running), sessions },
         );
       }
 
@@ -237,37 +246,37 @@ export const BROADCAST_TOOLS: ToolDefinition[] = [
       if (!file && !url) return toolError("start_broadcast needs a `file` path, a `url`, or timeline: true.");
 
       const source = file ? { kind: "file" as const, value: file } : { kind: "url" as const, value: url! };
-      const status = (await bridge.start({
-        url: ingestUrl(config),
-        protocol: config.protocol,
-        source,
+      const sessions = await startSourcePush(configIds, source, {
         loop: argBool(args, "loop") ?? false,
         transcode: argBool(args, "transcode") ?? true,
-        label: config.name,
-      })) ?? NO_BROADCAST_STATUS;
+        videoBitrate,
+      });
 
       return textResult(
         [
-          `Broadcasting "${config.name}" → ${(config.protocol ?? "").toUpperCase()}.`,
-          `  · source: ${source.kind === "file" ? `file "${file}"` : `url ${url}`}${argBool(args, "loop") ? " (looping)" : ""}`,
-          ...statusLines(status),
+          `Broadcasting to ${sessions.length} destination(s) from ${source.kind === "file" ? `file "${file}"` : `url ${url}`}${argBool(args, "loop") ? " (looping)" : ""}.`,
+          `  · target bitrate ${videoBitrate ? `${Math.round(videoBitrate / 1000)} kbps` : "auto"}`,
+          ...statusLines(sessions),
         ].join("\n"),
-        { ok: true, configId: config.id, name: config.name, protocol: config.protocol, running: status.running, ...status },
+        { ok: true, running: sessions.some((s) => s.running), sessions },
       );
     },
   },
   {
     name: "stop_broadcast",
     title: "Stop the broadcast",
-    description: "Stop the running broadcast — file or timeline. Leaves the stream config in place for the next push.",
-    inputSchema: object({}),
+    description: "Stop the running broadcast — one destination by `id` (from broadcast_status), or every destination when no id is given. Leaves the stream config in place for the next push.",
+    inputSchema: object({ id: str("A session id from broadcast_status, to stop just that destination.") }),
     annotations: WRITE,
-    run: async () => {
-      await stopTimelinePush();
+    run: async (args) => {
+      const id = argString(args, "id");
+      // Stopping a specific destination by id is scoped to that sink; only a full
+      // stop (no id) also tears down the live timeline capture.
+      if (!id) await stopTimelinePush();
       const bridge = broadcastBridge();
       if (!bridge) return toolError("Broadcasting is not available here.");
-      const status = (await bridge.stop()) ?? NO_BROADCAST_STATUS;
-      return textResult("Broadcast stopped.", { ok: true, running: status.running, ...status });
+      const sessions = (await bridge.stop(id)) ?? [];
+      return textResult(id ? `Stopped destination "${id}".` : "Broadcast stopped.", { ok: true, running: sessions.some((s) => s.running), sessions });
     },
   },
 ];

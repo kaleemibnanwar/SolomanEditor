@@ -28,6 +28,7 @@ import { createDevServerHost } from "@/lib/mcp/browserHost";
 import { agentServer } from "@/lib/mcp/session";
 import type { BroadcastBridge } from "@/lib/broadcastHost";
 import type { StoreBridge } from "@/lib/storage";
+import type { UpdateBridge } from "@/lib/updater";
 import type { WindowControlsBridge } from "@/lib/windowControls";
 
 /** Fixed on purpose: a client configures this exact port once and relies on it. */
@@ -121,6 +122,10 @@ declare global {
       broadcast?: BroadcastBridge;
       store?: StoreBridge;
       windowControls?: WindowControlsBridge;
+      update?: UpdateBridge;
+      system?: {
+        stats: () => Promise<{ memory: { total: number; free: number; used: number }; cpu: { percentCPUUsage: number }; gpu: number; ping: number }>;
+      };
     };
   }
 }

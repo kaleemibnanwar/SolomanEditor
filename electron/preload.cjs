@@ -61,7 +61,7 @@ contextBridge.exposeInMainWorld("octoCutHost", {
     probe: () => ipcRenderer.invoke("octo-cut:broadcast:probe"),
     status: () => ipcRenderer.invoke("octo-cut:broadcast:status"),
     start: (payload) => ipcRenderer.invoke("octo-cut:broadcast:start", payload),
-    stop: () => ipcRenderer.invoke("octo-cut:broadcast:stop"),
+    stop: (id) => ipcRenderer.invoke("octo-cut:broadcast:stop", id),
     /** A MediaRecorder chunk (timeline broadcast), forwarded to ffmpeg's stdin. */
     chunk: (payload) => ipcRenderer.send("octo-cut:broadcast:chunk", payload),
     onStatus: (handler) => listen("octo-cut:broadcast:status", handler),
@@ -94,5 +94,19 @@ contextBridge.exposeInMainWorld("octoCutHost", {
 
     /** Fires on any change, not just ones made through the two calls above. */
     onMaximizedChange: (handler) => listen("octo-cut:window:maximized-changed", handler),
+  },
+
+  /** Machine resources and network checks. */
+  system: {
+    stats: () => ipcRenderer.invoke("octo-cut:system:stats"),
+  },
+
+  /** Auto-update (packaged builds only) — one status shape plus three verbs. */
+  update: {
+    status: () => ipcRenderer.invoke("octo-cut:update:status"),
+    check: () => ipcRenderer.invoke("octo-cut:update:check"),
+    download: () => ipcRenderer.invoke("octo-cut:update:download"),
+    install: () => ipcRenderer.invoke("octo-cut:update:install"),
+    onStatus: (handler) => listen("octo-cut:update:status", handler),
   },
 });
