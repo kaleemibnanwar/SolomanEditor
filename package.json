@@ -1,6 +1,6 @@
 {
   "name": "octo-cut",
-  "version": "0.1.0",
+  "version": "2.6.10",
   "description": "A non-destructive video editor that runs on your desktop",
   "homepage": "https://octocut.app",
   "desktopName": "octo-cut.desktop",
