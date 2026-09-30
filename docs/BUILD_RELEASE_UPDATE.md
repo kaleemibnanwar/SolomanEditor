@@ -72,7 +72,7 @@ The updater only exists in a **packaged** build (`app.isPackaged`), so `pnpm dev
 
 | Platform | Artifacts in the release | Auto-update? |
 |---|---|---|
-| macOS | `*.zip` (zip is required, dmg is a bonus) | ✅ |
+| macOS | `*.zip` (required for auto-update) + `.dmg` + `.pkg` | ✅ |
 | Windows | `*Setup.exe` + `*.blockmap` + `latest.yml` | ✅ |
 | Linux | `.deb`, `AppImage` | ❌ manual install |
 
@@ -181,6 +181,31 @@ base64**, because CI has no access to your keychain.
 Notarization is detected automatically: if the `APPLE_*` secrets are present,
 `electron-builder` notarizes; hardened runtime is on by default. No `electron-builder.yml`
 changes are needed — the workflow's per-OS steps feed the env vars in.
+
+### The macOS release flow, end to end
+
+```
+Ubuntu development machine (tag a release)
+        │  git push --tags
+        ▼
+GitHub (kaleemibnanwar/octocut-source)
+        │  release.yml matrix picks the macOS runner
+        ▼
+GitHub Actions macOS runner
+        │  MAC_CSC_LINK (base64 .p12) → CSC_LINK env
+        ▼
+electron-builder builds + signs the .app
+        │  APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
+        ▼
+notarytool notarization + staple
+        ▼
+Release .zip (auto-update) + .dmg + .pkg on kaleemibnanwar/octocut
+```
+
+The `.pkg` is signed with the same Developer ID Application identity; if you want a
+separate **Developer ID Installer** identity for the `.pkg`, set `mac.identity` in
+`electron-builder.yml` — otherwise the default is used and Apple still accepts it for
+notarization.
 
 ## 8. Troubleshooting
 

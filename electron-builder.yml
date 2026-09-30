@@ -57,6 +57,7 @@ mac:
   target:
     - zip
     - dmg
+    - pkg
   category: public.app-category.video
   darkModeSupport: true
 
