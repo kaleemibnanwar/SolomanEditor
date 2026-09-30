@@ -1,11 +1,11 @@
 # Build, sign (when credentials are present) and publish a release, then mirror
-# it to the source repo. The updater (`electron-updater` in `electron/main.cjs`)
-# reads the `latest*.yml` feed from the PUBLIC repo, so that is where binaries
-# must land; the source repo gets a copy for archive/backup.
+# the installers to the source repo. The updater (`electron-updater` in
+# `electron/main.cjs`) reads the `latest*.yml` feed from the PUBLIC repo
+# (kaleemibnanwar/octocut), so electron-builder publishes there; the source repo
+# gets a copy of the installers for archive/backup.
 #
 # Triggered by pushing a `v*` tag (or "Run workflow"). The version comes from
-# `package.json`; bump it *and* tag it together, e.g. `pnpm version 0.1.0` then
-# `git push --tags`.
+# `package.json`; bump it *and* tag it together, e.g. `pnpm version 0.1.0`.
 #
 # Secrets:
 #   PUBLIC_REPO_TOKEN  (required)  PAT with `contents: write` on kaleemibnanwar/octocut
@@ -15,7 +15,7 @@
 #        (optional) macOS notarization via App Store Connect API key (.p8 stored base64)
 # Without the optional secrets the build still succeeds, just unsigned.
 
-name: Release
+name: Build & Publish Multi-Platform Release Installers
 
 on:
   push:
@@ -26,25 +26,25 @@ on:
 permissions:
   contents: write
 
+env:
+  NODE_OPTIONS: "--max-old-space-size=8192"
+
 jobs:
-  build:
+  build-release:
+    name: Build on ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
-    env:
-      NODE_OPTIONS: --max-old-space-size=8192
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # electron-builder's Squirrel/NSIS outputs are sensitive to CRLF, and the
-      # guide's "works locally but not on CI" bugs trace to autocrlf. Force it off.
-      - name: Normalize line endings
-        run: git config --global core.autocrlf false
+    steps:
+      - name: Checkout Source Code
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" .
+          git checkout "${{ github.ref_name }}" || true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -57,7 +57,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build renderer
@@ -95,40 +95,29 @@ jobs:
           "CSC_LINK=$env:CSC_LINK" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "CSC_KEY_PASSWORD=$env:CSC_KEY_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Build, sign and publish installers
-        env:
-          # Points electron-builder's GitHub publisher at the PUBLIC release repo.
-          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
-        run: pnpm exec electron-builder --publish always
-
-  mirror:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download the public release assets
+      - name: Build, sign and publish installers (public repo)
         env:
           GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+        shell: bash
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          mkdir -p dist-release
-          gh release download "v${VERSION}" \
-            --repo kaleemibnanwar/octocut \
-            --dir dist-release \
-            --clobber
+          if [ -z "$GH_TOKEN" ]; then
+            echo "PUBLIC_REPO_TOKEN is required to publish updater assets to kaleemibnanwar/octocut" >&2
+            exit 1
+          fi
+          pnpm exec electron-builder --publish always
 
-      - name: Mirror the release to the source repo
+      - name: Upload installers to the source repo
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          gh release create "v${VERSION}" \
-            --repo kaleemibnanwar/octocut-source \
-            --title "Octo Cut ${VERSION}" \
-            --notes "Release ${VERSION}. Download page: https://github.com/kaleemibnanwar/octocut/releases/tag/v${VERSION}" \
-            || echo "Release already exists; uploading assets"
-          gh release upload "v${VERSION}" dist-release/* \
-            --repo kaleemibnanwar/octocut-source \
-            --clobber
+          TAG="${{ github.ref_name }}"
+          if [ -z "$TAG" ] || [ "$TAG" = "main" ]; then
+            TAG="v$(node -p "require('./package.json').version")"
+          fi
+          # `create` is idempotent-ish: three OS runners race to create the same
+          # release, so ignore the "already exists" failure and just upload.
+          gh release create "$TAG" --repo "${{ github.repository }}" \
+            --title "Octo Cut $TAG" --notes "Release $TAG" || true
+          find release -maxdepth 1 -type f ! -name 'builder-*' -print0 | \
+            xargs -0 gh release upload "$TAG" --repo "${{ github.repository }}" --clobber
