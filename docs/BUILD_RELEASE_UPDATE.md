@@ -108,7 +108,8 @@ The updater only exists in a **packaged** build (`app.isPackaged`), so `pnpm dev
 |---|---|---|
 | `PUBLIC_REPO_TOKEN` | publish to `kaleemibnanwar/octocut` | **yes** (a PAT with `contents: write` on the public repo) |
 | `GITHUB_TOKEN` | mirror to the source repo | auto-provided |
-| `CSC_LINK` / `CSC_KEY_PASSWORD` | macOS Developer ID + Windows cert signing | optional — unsigned without them |
+| `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD` | macOS code signing (base64 `.p12` + password) | optional — unsigned without them |
+| `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` | Windows code signing (base64 `.pfx` + password) | optional — unsigned without them |
 | `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` | macOS notarization | optional — Gatekeeper will warn without them |
 
 Without the optional signing secrets the workflow still produces working installers;
@@ -133,13 +134,53 @@ the only first-party hooks exposed; no project or media content is ever sent.
 
 ## 7. Signing (production)
 
-- **macOS:** export a Developer ID Application cert to `CSC_LINK` (base64 `.p12`) +
-  `CSC_KEY_PASSWORD`, and set `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` /
-  `APPLE_TEAM_ID` for notarization. `electron-builder` signs and notarizes when all
-  are present.
-- **Windows:** `CSC_LINK` / `CSC_KEY_PASSWORD` (a `.pfx`) signs the NSIS installer.
-  For Azure Trusted Signing you would add a `win.signtoolOptions` block — not wired
-  here yet.
+macOS and Windows each need their own certificate, so they use **separate** secrets
+(a `.p12` for macOS, a `.pfx` for Windows). Both are uploaded as **single-line
+base64**, because CI has no access to your keychain.
+
+### macOS (Developer ID + notarization)
+
+1. Enroll in the [Apple Developer Program](https://developer.apple.com/programs) ($99/yr).
+2. In **Keychain Access → Certificate Assistant → Request a Certificate From a
+   Certificate Authority**, then in the Apple Developer portal create a
+   **Developer ID Application** certificate and install it.
+3. Export that cert **and its private key** as a `.p12` (right-click → Export,
+   choose `.p12`, set a password).
+4. Base64 it (single line) and add the secrets:
+   ```bash
+   base64 -w0 DeveloperIDApplication.p12 | tr -d '\n'   # on Linux/GNU coreutils
+   # macOS ships BSD base64 which wraps at 76 chars — strip the newlines:
+   base64 -i DeveloperIDApplication.p12 | tr -d '\n'
+
+   gh secret set MAC_CSC_LINK --repo kaleemibnanwar/octocut-source --body "$(base64 -w0 DeveloperIDApplication.p12)"
+   gh secret set MAC_CSC_KEY_PASSWORD --repo kaleemibnanwar/octocut-source --body "<p12 password>"
+   ```
+5. Notarization credentials:
+   ```bash
+   gh secret set APPLE_ID --repo kaleemibnanwar/octocut-source --body "you@example.com"
+   gh secret set APPLE_APP_SPECIFIC_PASSWORD --repo kaleemibnanwar/octocut-source --body "xxxx-xxxx-xxxx-xxxx"
+   gh secret set APPLE_TEAM_ID --repo kaleemibnanwar/octocut-source --body "ABCDE12345"
+   ```
+   - `APPLE_ID`: your Apple ID. `APPLE_APP_SPECIFIC_PASSWORD`: an **app-specific
+     password** from appleid.apple.com. `APPLE_TEAM_ID`: the 10-char team id under
+     developer.apple.com/account → Membership.
+   - Alternative to Apple ID: an App Store Connect API key (`APPLE_API_KEY`,
+     `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`) — electron-builder supports both.
+
+### Windows (code-signing cert)
+
+1. Buy an **OV or EV code-signing certificate** (e.g. Sectigo, DigiCert, SSL.com), or
+   use **Azure Trusted Signing** (cheaper, no hardware/HSM).
+2. Export it as a `.pfx` (with password) from the CA's portal or `certmgr.msc`.
+3. Add the secrets:
+   ```bash
+   gh secret set WIN_CSC_LINK --repo kaleemibnanwar/octocut-source --body "$(base64 -w0 cert.pfx)"
+   gh secret set WIN_CSC_KEY_PASSWORD --repo kaleemibnanwar/octocut-source --body "<pfx password>"
+   ```
+
+Notarization is detected automatically: if the `APPLE_*` secrets are present,
+`electron-builder` notarizes; hardened runtime is on by default. No `electron-builder.yml`
+changes are needed — the workflow's per-OS steps feed the env vars in.
 
 ## 8. Troubleshooting
 
