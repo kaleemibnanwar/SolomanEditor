@@ -66,14 +66,17 @@ jobs:
       - name: Configure macOS signing + notarization
         if: runner.os == 'macOS'
         env:
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_LINK_B64: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          echo "CSC_LINK=$CSC_LINK" >> "$GITHUB_ENV"
+          # Decode the .p12 (stored base64) to a file, then point CSC_LINK at the
+          # path — avoids round-tripping a multi-KB base64 string through GITHUB_ENV.
+          printf '%s' "$MAC_CSC_LINK_B64" | python3 -c 'import base64,sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read()))' > "$RUNNER_TEMP/octocut.p12"
+          echo "CSC_LINK=$RUNNER_TEMP/octocut.p12" >> "$GITHUB_ENV"
           echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
           echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
           echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID" >> "$GITHUB_ENV"
