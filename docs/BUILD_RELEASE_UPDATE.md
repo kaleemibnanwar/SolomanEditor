@@ -21,36 +21,20 @@ inside the app and how each platform wraps it. Native dependencies (`onnxruntime
 `sharp`) are auto-detected and unpacked from the ASAR — `npmRebuild: false` in
 `electron-builder.yml` is fine because none of them need rebuilding for Electron.
 
-## 2. The two-repository system
+## 2. The repository
 
-Distribution uses two repos — one private (source), one public (releases). This is
-the single most important architectural decision, because **the auto-updater's feed
-must live on a public repo**.
-
-| Repo | Purpose | Contents |
-|---|---|---|
-| `kaleemibnanwar/solomaneditor-source` (private) | Development | Full source, history, CI |
-| `kaleemibnanwar/solomaneditor` (public) | Distribution | Download-page README + GitHub Releases with binaries |
+Soloman Editor is open source: development and distribution both live in the single
+public repo **`kaleemibnanwar/SolomanEditor`**. (Historically this was a two-repo
+system — a private source repo plus a public releases-only repo — because the
+auto-updater's feed must live on a public repo. Now that the source itself is public,
+one repo serves both roles.)
 
 The `publish` block in `electron-builder.yml` points `owner: kaleemibnanwar, repo:
-solomaneditor` — the **public** repo — so `latest*.yml` and the installers are uploaded
-there, and `electron-updater` reads them from there. The private repo never hosts the
-update feed.
-
-Create the two repos and add both remotes (the public one only needs the download
-page from `docs/public-repo/`, not the source):
+SolomanEditor`, so `latest*.yml` and the installers are uploaded to this repo's
+GitHub Releases, and `electron-updater` reads them from there.
 
 ```bash
-# private — the source repo you are already in
-git remote add origin git@github.com:kaleemibnanwar/solomaneditor-source.git
-git push -u origin main
-
-# public — releases only
-mkdir -p /tmp/solomaneditor-public && cp -r docs/public-repo/. /tmp/solomaneditor-public/
-cd /tmp/solomaneditor-public
-git init && git add . && git commit -m "first commit"
-git branch -M main
-git remote add origin git@github.com:kaleemibnanwar/solomaneditor.git
+git remote add origin git@github.com:kaleemibnanwar/SolomanEditor.git
 git push -u origin main
 ```
 
@@ -106,7 +90,7 @@ The updater only exists in a **packaged** build (`app.isPackaged`), so `pnpm dev
 
 | Secret | Used by | Required? |
 |---|---|---|
-| `PUBLIC_REPO_TOKEN` | publish to `kaleemibnanwar/solomaneditor` | **yes** (a PAT with `contents: write` on the public repo) |
+| `PUBLIC_REPO_TOKEN` | publish to `kaleemibnanwar/SolomanEditor` | **yes** (a PAT with `contents: write` on the public repo) |
 | `GITHUB_TOKEN` | mirror to the source repo | auto-provided |
 | `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD` | macOS code signing (base64 `.p12` + password) | optional — unsigned without them |
 | `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` | Windows code signing (base64 `.pfx` + password) | optional — unsigned without them |
@@ -153,18 +137,18 @@ base64**, because CI has no access to your keychain.
    # macOS ships BSD base64 which wraps at 76 chars — strip the newlines:
    base64 -i DeveloperIDApplication.p12 | tr -d '\n'
 
-   gh secret set MAC_CSC_LINK --repo kaleemibnanwar/solomaneditor-source --body "$(base64 -w0 DeveloperIDApplication.p12)"
-   gh secret set MAC_CSC_KEY_PASSWORD --repo kaleemibnanwar/solomaneditor-source --body "<p12 password>"
+   gh secret set MAC_CSC_LINK --repo kaleemibnanwar/SolomanEditor --body "$(base64 -w0 DeveloperIDApplication.p12)"
+   gh secret set MAC_CSC_KEY_PASSWORD --repo kaleemibnanwar/SolomanEditor --body "<p12 password>"
    ```
 5. Notarization credentials — an **App Store Connect API key** (team-scoped, no
    expiry, the automation-friendly path). Create it under **App Store Connect →
    Users and Access → Integrations → API Keys** (Developer access) and download the
    `.p8`. The workflow reads it base64 so the multiline key survives `GITHUB_ENV`:
    ```bash
-   gh secret set APPLE_API_KEY_BASE64 --repo kaleemibnanwar/solomaneditor-source --body "$(base64 -w0 AuthKey_XXXX.p8)"
-   gh secret set APPLE_API_KEY_ID --repo kaleemibnanwar/solomaneditor-source --body "KEYID"       # e.g. CRPZB6A7XX
-   gh secret set APPLE_API_ISSUER --repo kaleemibnanwar/solomaneditor-source --body "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-   gh secret set APPLE_TEAM_ID --repo kaleemibnanwar/solomaneditor-source --body "BR8AR3UC53"
+   gh secret set APPLE_API_KEY_BASE64 --repo kaleemibnanwar/SolomanEditor --body "$(base64 -w0 AuthKey_XXXX.p8)"
+   gh secret set APPLE_API_KEY_ID --repo kaleemibnanwar/SolomanEditor --body "KEYID"       # e.g. CRPZB6A7XX
+   gh secret set APPLE_API_ISSUER --repo kaleemibnanwar/SolomanEditor --body "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+   gh secret set APPLE_TEAM_ID --repo kaleemibnanwar/SolomanEditor --body "BR8AR3UC53"
    ```
    The workflow decodes `APPLE_API_KEY_BASE64` to a file and points `APPLE_API_KEY`
    at it, so `notarytool` gets a path. (An Apple ID + app-specific password works
@@ -178,8 +162,8 @@ base64**, because CI has no access to your keychain.
 2. Export it as a `.pfx` (with password) from the CA's portal or `certmgr.msc`.
 3. Add the secrets:
    ```bash
-   gh secret set WIN_CSC_LINK --repo kaleemibnanwar/solomaneditor-source --body "$(base64 -w0 cert.pfx)"
-   gh secret set WIN_CSC_KEY_PASSWORD --repo kaleemibnanwar/solomaneditor-source --body "<pfx password>"
+   gh secret set WIN_CSC_LINK --repo kaleemibnanwar/SolomanEditor --body "$(base64 -w0 cert.pfx)"
+   gh secret set WIN_CSC_KEY_PASSWORD --repo kaleemibnanwar/SolomanEditor --body "<pfx password>"
    ```
 
 Notarization is detected automatically: if the `APPLE_*` secrets are present,
@@ -192,7 +176,7 @@ changes are needed — the workflow's per-OS steps feed the env vars in.
 Ubuntu development machine (tag a release)
         │  git push --tags
         ▼
-GitHub (kaleemibnanwar/solomaneditor-source)
+GitHub (kaleemibnanwar/SolomanEditor)
         │  release.yml matrix picks the macOS runner
         ▼
 GitHub Actions macOS runner
@@ -203,7 +187,7 @@ electron-builder builds + signs the .app
         ▼
 notarytool notarization + staple
         ▼
-Release .zip (auto-update) + .dmg on kaleemibnanwar/solomaneditor
+Release .zip (auto-update) + .dmg on kaleemibnanwar/SolomanEditor
 ```
 
 The `.dmg` and `.zip` cover normal distribution and notarization. A `.pkg` is not
@@ -214,7 +198,7 @@ Developer ID Application certificate used for the app cannot sign that container
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Updater never finds an update | Feed repo is wrong or private | `publish.owner/repo` must be `kaleemibnanwar/solomaneditor` (public); verify `app-update.yml` inside `release/*-unpacked/resources` |
+| Updater never finds an update | Feed repo is wrong or private | `publish.owner/repo` must be `kaleemibnanwar/SolomanEditor` (public); verify `app-update.yml` inside `release/*-unpacked/resources` |
 | Windows/mac auto-update silently broken | Artifacts renamed after build | Upload the exact filenames from `release/`, `latest.yml` references them |
 | `.deb` build fails on CI | `fpm`/native deps missing | use `ubuntu-latest`; the workflow already does |
 | `pnpm install --frozen-lockfile` fails in CI | lockfile out of date | run `pnpm install` locally and commit the lockfile |

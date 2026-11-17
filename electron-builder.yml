@@ -28,7 +28,7 @@ directories:
 publish:
   provider: github
   owner: kaleemibnanwar
-  repo: solomaneditor
+  repo: SolomanEditor
   publishAutoUpdate: true
 
 # Write `latest.yml`, `beta.yml`, `alpha.yml` so the updater can follow whatever

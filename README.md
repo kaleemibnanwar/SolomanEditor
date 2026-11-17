@@ -4,12 +4,21 @@
 
 # Soloman Editor
 
-A video editor that runs entirely in the browser. Import clips, images and audio, arrange them on a
-multi-track timeline, animate them with keyframes, and export a real video file — no upload, no
-server, no account. Your media never leaves your machine.
+A video editor that runs entirely on your machine — as a desktop app (macOS, Windows, Linux) or
+in the browser. Import clips, images and audio, arrange them on a multi-track timeline, animate
+them with keyframes, and export a real video file — no upload, no server, no account. Your media
+never leaves your machine.
 
 > **Soloman Editor is fully client-side.** Rendering and video encoding both happen in the tab, using
 > Canvas 2D, Web Audio and `MediaRecorder`.
+
+<p align="center">
+  <a href="https://github.com/kaleemibnanwar/SolomanEditor/releases/latest"><b>Download</b></a> ·
+  <a href="#features">Features</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#driving-it-from-an-ai-tool">Drive it from an AI tool</a> ·
+  <a href="#keyboard-shortcuts">Shortcuts</a>
+</p>
 
 ---
 
@@ -50,6 +59,8 @@ immediately.
 ## Getting started
 
 ```bash
+git clone https://github.com/kaleemibnanwar/SolomanEditor.git
+cd SolomanEditor
 pnpm install
 pnpm dev        # dev server on http://localhost:8080
 pnpm build      # production build
@@ -114,9 +125,9 @@ than Electron: it names the URL and the error code, and the terminal says so too
 
 ## Releases & auto-update
 
-The desktop app ships through a two-repository setup: source lives in the private
-`solomaneditor-source` repo, and installers are published to the public `solomaneditor` repo, where
-`electron-updater` reads its feed. On macOS and Windows the app checks for updates at
+Soloman Editor is open source: the full source and the installers live together in this
+repository. Installers are published to [GitHub Releases](https://github.com/kaleemibnanwar/SolomanEditor/releases),
+where `electron-updater` reads its feed. On macOS and Windows the app checks for updates at
 launch and hourly, downloads them in the background, and shows an "Update ready —
 restart" button in the top bar. Linux updates are manual.
 
