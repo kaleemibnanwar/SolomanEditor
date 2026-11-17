@@ -95,7 +95,7 @@ export interface MediaBridge {
 export async function readLocalFile(
   filePath: string,
 ): Promise<{ data: Uint8Array | ArrayBuffer; name: string; size: number }> {
-  const bridge = typeof window === "undefined" ? undefined : window.octoCutHost?.media;
+  const bridge = typeof window === "undefined" ? undefined : window.solomanEditorHost?.media;
   if (!bridge) {
     throw new Error("Local file paths need the desktop app — pass a `url` instead.");
   }
@@ -112,10 +112,10 @@ declare global {
   interface Window {
     // Every bridge `electron/preload.cjs` exposes lives on one object, so this
     // is the one place that declares its shape — a second `declare global`
-    // elsewhere augmenting the same `octoCutHost` property would conflict rather
+    // elsewhere augmenting the same `solomanEditorHost` property would conflict rather
     // than merge, since TS requires identical types when a property is
     // redeclared. See `windowControls.ts` for the third bridge.
-    octoCutHost?: {
+    solomanEditorHost?: {
       mcp: HostBridge;
       settings?: SettingsBridge;
       media?: MediaBridge;
@@ -152,7 +152,7 @@ let probing = false;
 const listeners = new Set<(status: HttpHostStatus) => void>();
 
 /** The preload bridge, or `null` outside the desktop app. */
-const desktopHost = (): HostBridge | null => (typeof window === "undefined" ? null : window.octoCutHost?.mcp ?? null);
+const desktopHost = (): HostBridge | null => (typeof window === "undefined" ? null : window.solomanEditorHost?.mcp ?? null);
 
 /** Whichever listener this page has — the desktop app's, else the dev server's. */
 const host = (): HostBridge | null => desktopHost() ?? devHost;

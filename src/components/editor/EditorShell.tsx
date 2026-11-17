@@ -5,9 +5,9 @@
  * shortcuts, the export queue pump and the stage → panel → timeline layout.
  */
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Grid3X3, Loader2, Scan } from "lucide-react";
 import { toast } from "sonner";
-import octoLogo from "@/assets/octo-logo.png";
+import solomanLogo from "@/assets/soloman-editor-logo.png";
 import BroadcastStudio from "@/components/broadcast/BroadcastStudio";
 import ImageStudio from "@/components/image/ImageStudio";
 import AgentPanel from "@/components/editor/AgentPanel";
@@ -106,7 +106,7 @@ export default function EditorShell() {
       } catch (error) {
         console.error("Could not restore the last project; loading the demo instead.", error);
         toast.warning("Your last project could not be opened", {
-          description: "Octo Cut loaded the demo so you can keep working. Your saved project was not changed.",
+          description: "Soloman Editor loaded the demo so you can keep working. Your saved project was not changed.",
         });
       }
       void resetToDemo((message, progress) => setBoot({ message, progress }));
@@ -171,6 +171,7 @@ export default function EditorShell() {
             <AssetLibrary />
 
             <main className="flex min-w-0 flex-1 flex-col">
+              <PreviewHeader />
               <Stage />
               <Transport />
             </main>
@@ -179,6 +180,7 @@ export default function EditorShell() {
           </div>
 
           <Timeline />
+          <StatusBar />
         </div>
       ) : mode === "image" ? (
         <ImageStudio />
@@ -199,6 +201,52 @@ export default function EditorShell() {
   );
 }
 
+function PreviewHeader() {
+  const settings = useEditor((s) => s.project.settings);
+  const showGrid = useEditor((s) => s.ui.showGrid);
+  const showSafeArea = useEditor((s) => s.ui.showSafeArea);
+  const ratio = settings.width === settings.height ? "1:1" : settings.width > settings.height ? "16:9" : "9:16";
+
+  return (
+    <div className="flex h-[45px] shrink-0 items-center gap-3 border-b border-km-border/70 bg-km-bg px-5">
+      <span className="text-[12px] font-bold text-km-text">Preview</span>
+      <span className="text-[11px] text-km-faint">— {settings.name}</span>
+      <div className="ml-auto flex items-center gap-2 text-[11px] text-km-dim">
+        <span>{ratio}</span>
+        <span className="rounded-md border border-km-border px-2 py-1">{settings.width} × {settings.height}</span>
+        <button
+          type="button"
+          title="Toggle grid"
+          onClick={() => editor().setUi({ showGrid: !showGrid })}
+          className={`grid h-8 w-8 place-items-center rounded-md transition hover:bg-km-raised hover:text-km-text ${showGrid ? "bg-km-raised text-km-text" : ""}`}
+        >
+          <Grid3X3 className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          title="Toggle safe margins"
+          onClick={() => editor().setUi({ showSafeArea: !showSafeArea })}
+          className={`grid h-8 w-8 place-items-center rounded-md transition hover:bg-km-raised hover:text-km-text ${showSafeArea ? "bg-km-raised text-km-text" : ""}`}
+        >
+          <Scan className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StatusBar() {
+  const fps = useEditor((s) => s.project.settings.fps);
+  const lastAction = useEditor((s) => s.lastAction);
+
+  return (
+    <div className="flex h-6 shrink-0 items-center justify-between border-t border-km-border bg-km-track px-[14px] text-[10px] text-km-faint">
+      <span>Soloman Editor <span className="mx-1 text-km-border">·</span> {lastAction || "All changes saved"} <span className="mx-1 text-km-border">·</span> {fps} fps</span>
+      <span>Space to play / pause <span className="mx-2 text-km-border">·</span> Ctrl + E to export</span>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ *
  * Boot overlay
  * ------------------------------------------------------------------ */
@@ -206,10 +254,10 @@ export default function EditorShell() {
 function BootOverlay({ message, progress }: { message: string; progress: number }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-km-bg">
-      <img src={octoLogo} alt="Octo Cut" className="h-20 w-20 object-contain drop-shadow-lg" />
+      <img src={solomanLogo} alt="Soloman Editor" className="h-20 w-20 object-contain drop-shadow-lg" />
 
       <div className="text-center">
-        <h1 className="text-[15px] font-semibold tracking-tight">Octo Cut</h1>
+        <h1 className="text-[15px] font-semibold tracking-tight">Soloman Editor</h1>
         <p className="mt-1 text-[12px] text-km-dim">{message}</p>
       </div>
 

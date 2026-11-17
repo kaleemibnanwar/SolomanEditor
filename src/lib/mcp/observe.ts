@@ -524,7 +524,7 @@ export interface ProjectLibrary {
  * that is asynchronous: what has been written to disk lives outside the store,
  * in IndexedDB, and both reading it and asking whether this browser will keep
  * it are promise-shaped. Shared by the `list_projects` tool and the
- * `octo-cut://projects` resource so the two can never disagree.
+ * `soloman-editor://projects` resource so the two can never disagree.
  *
  * The poster data URL is dropped deliberately — it is a full JPEG of a frame,
  * and it would swamp every payload it appeared in.

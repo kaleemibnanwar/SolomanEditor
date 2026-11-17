@@ -7,7 +7,7 @@
  * exposed to clients three ways:
  *
  *   · `initialize.instructions` — the short version, always in context;
- *   · the `octo-cut://playbook` resource — the full text, fetchable on demand;
+ *   · the `soloman-editor://playbook` resource — the full text, fetchable on demand;
  *   · the prompts — the same material turned into concrete, staged workflows.
  *
  * It is deliberately specific to how THIS editor is built (layers on tracks, one
@@ -16,7 +16,7 @@
  */
 
 /** Always-in-context orientation. Kept short: the full text is a resource. */
-export const SERVER_INSTRUCTIONS = `This server is the live editing session of "Octo Cut", a non-destructive
+export const SERVER_INSTRUCTIONS = `This server is the live editing session of "Soloman Editor", a non-destructive
 timeline editor. The user is almost certainly looking at it while you work, and everything you do
 appears on screen immediately.
 
@@ -26,13 +26,13 @@ in front of it. Clips that touch on a track form a JUNCTION, which is what a tra
 attaches to. Nothing is ever destructive — clips hold an in-point and a duration into source media,
 so trimming never alters the asset.
 
-Work belongs to a PROJECT. list_projects (or the octo-cut://projects resource) shows the saved
+Work belongs to a PROJECT. list_projects (or the soloman-editor://projects resource) shows the saved
 library; create_project and open_project move between projects, and save_project writes one out
 immediately. Work saves itself a couple of seconds after each edit, so a save is only needed when
 you want it written NOW. Note that create_project and open_project REPLACE what is open and clear
 the undo history — never call one to try something out on someone's cut.
 
-Start every session with get_editor_state, then get_timeline. Read octo-cut://playbook for the
+Start every session with get_editor_state, then get_timeline. Read soloman-editor://playbook for the
 editing workflow, and prefer the flow_* tools for multi-step work: one flow_assembly_cut call
 builds a whole rough cut, where doing it by hand would take a dozen calls.
 
@@ -232,7 +232,7 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
       { name: "brief", description: "What the piece is for, and anything known about running order", required: true },
       { name: "target_duration", description: "Target length in seconds, if there is one" },
     ],
-    render: (a) => `Edit a rough cut in the live Octo Cut session.
+    render: (a) => `Edit a rough cut in the live Soloman Editor session.
 
 Brief: ${or(a.brief, "(not given — ask, or proceed from the footage you find)")}
 Target duration: ${or(a.target_duration, "no fixed target")}
@@ -246,7 +246,7 @@ Work in stages, and narrate one line before each:
 4. Trim it to the story: for every seam, check the graphic, rhythmic, spatial and temporal
    relationship between the outgoing and incoming shot, and trim so the cut lands on action.
    Use trim_clip and flow_ripple_delete.
-5. Read octo-cut://playbook if you need the craft rules in full.
+5. Read soloman-editor://playbook if you need the craft rules in full.
 
 Leave titles, grade and transitions for a later pass — a rough cut is about story order and length.
 Finish with get_timeline and tell me the resulting duration, the running order, and the three
@@ -260,7 +260,7 @@ weakest joins you can see.`,
       { name: "notes", description: "What the user wants changed", required: true },
       { name: "clip_ids", description: "Comma-separated clip ids to focus on, if any" },
     ],
-    render: (a) => `Do a fine-cut pass on the Octo Cut session.
+    render: (a) => `Do a fine-cut pass on the Soloman Editor session.
 
 Notes: ${a.notes || "(none)"}
 Focus clips: ${or(a.clip_ids, "the whole sequence")}
@@ -288,7 +288,7 @@ do and why.`,
       { name: "platform", description: "e.g. TikTok / Reels (9:16), Instagram feed (4:5), square (1:1)" },
       { name: "hook_seconds", description: "How long the opening has to earn attention" },
     ],
-    render: (a) => `Reformat this Octo Cut project for ${or(a.platform, "vertical short-form (9:16)")}.
+    render: (a) => `Reformat this Soloman Editor project for ${or(a.platform, "vertical short-form (9:16)")}.
 
 1. flow_social_reframe to set the canvas and refit every layer's framing.
 2. The opening is the whole game here. The first ${or(a.hook_seconds, "1.5")} seconds must carry
@@ -305,7 +305,7 @@ Report the new duration and the framing decisions you had to make.`,
     title: "Review the edit",
     description: "Read-only critique of the current cut, with no changes made.",
     arguments: [{ name: "focus", description: "What to scrutinise, if anything" }],
-    render: (a) => `Review the current Octo Cut timeline. MAKE NO CHANGES — this is a reading pass only.
+    render: (a) => `Review the current Soloman Editor timeline. MAKE NO CHANGES — this is a reading pass only.
 
 Focus: ${or(a.focus, "the cut as a whole")}
 
@@ -331,7 +331,7 @@ you would use to fix it. Be concrete and be willing to say the cut is fine.`,
       { name: "topic", description: "The one-word subject (e.g. OIL, IRAN, CHIPS)" },
       { name: "script", description: "The narration line or two, for which you produce the audio" },
     ],
-    render: (a) => `Produce a branded video in the live Octo Cut session.
+    render: (a) => `Produce a branded video in the live Soloman Editor session.
 
 Template: ${or(a.template, "(ask, or pick one with list_brands)")}
 Topic: ${or(a.topic, "a single word, uppercased")}
@@ -339,7 +339,7 @@ Script: ${or(a.script, "no narration")}
 
 This server is a video editor only — you source and create the media. Work in this order:
 
-1. list_brands, then read octo-cut://playbook if you need the craft rules. Decide the brand and
+1. list_brands, then read soloman-editor://playbook if you need the craft rules. Decide the brand and
    template that fit the topic.
 2. With your OWN tools, produce or find: a faint dark topic cue image, the narration audio, and a
    looping music bed. Note the brand's palette, voice profile and music mood from list_brands so the

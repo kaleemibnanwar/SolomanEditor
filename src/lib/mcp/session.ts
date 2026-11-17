@@ -86,7 +86,7 @@ export function subscribeBridgeStatus(listener: (status: BridgeStatus) => void):
 
 /** What a host is told when it says "hello" on the channel. */
 export const agentDescriptor = (): AgentDescriptor => ({
-  server: "octo-cut",
+  server: "soloman-editor",
   protocolVersion: agentServer.state().protocolVersion,
   channel: BRIDGE_CHANNEL,
   tools: agentServer.tools.length,
@@ -101,7 +101,7 @@ export const agentDescriptor = (): AgentDescriptor => ({
 declare global {
   interface Window {
     /** The session, reachable from the devtools console (see the panel's Copy snippet). */
-    octoCutMcp?: {
+    solomanEditorMcp?: {
       server: McpServer;
       client: McpClient;
       descriptor: () => AgentDescriptor;
@@ -118,7 +118,7 @@ declare global {
 export function installAgentAccess(): WindowBridge {
   const started = ensureAgentBridge();
   if (typeof window !== "undefined") {
-    window.octoCutMcp = {
+    window.solomanEditorMcp = {
       server: agentServer,
       client: agentClient,
       descriptor: agentDescriptor,

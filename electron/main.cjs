@@ -29,7 +29,7 @@ const { createStore } = require("./db.cjs");
  * ------------------------------------------------------------------ */
 
 const SCHEME = "app";
-const HOST = "octo-cut";
+const HOST = "soloman-editor";
 const ORIGIN = `${SCHEME}://${HOST}`;
 
 const DIST_DIR = path.join(__dirname, "..", "dist");
@@ -130,14 +130,14 @@ function failurePage() {
     ? "The Vite dev server did not answer. Start it with <code>pnpm dev</code> — or run <code>pnpm electron:dev</code>, which starts both."
     : "There is no build to load. Run <code>pnpm build</code> first, or use <code>pnpm electron:dev</code>.";
 
-  return `<!doctype html><meta charset="utf-8"><title>Octo Cut</title>
+  return `<!doctype html><meta charset="utf-8"><title>Soloman Editor</title>
 <style>
 body{background:#0d0d10;color:#e9e9f0;font:14px/1.6 ui-sans-serif,system-ui;margin:0;padding:48px}
 h1{font-size:17px;margin:0 0 10px}p{margin:0 0 20px;color:#8b8b98;max-width:70ch}
 code{color:#93c5fd;font:12.5px ui-monospace,monospace}
 pre{white-space:pre-wrap;color:#8b8b98;font:12.5px ui-monospace,monospace;border-left:2px solid #2a2a33;padding-left:12px}
 </style>
-<h1>Octo Cut could not load the editor</h1>
+<h1>Soloman Editor could not load the editor</h1>
 <p>${fix}</p>
 <pre>${escape(startupFailure ?? "No detail was reported.")}</pre>`;
 }
@@ -202,7 +202,7 @@ function dispatchToEditor(payload) {
     }, DISPATCH_TIMEOUT_MS);
 
     pendingRequests.set(id, { resolve, timer });
-    win.webContents.send("octo-cut:mcp:request", { id, payload });
+    win.webContents.send("soloman-editor:mcp:request", { id, payload });
   });
 }
 
@@ -215,8 +215,8 @@ function broadcast(channel, payload) {
 
 const mcpServer = createMcpHttpServer({
   dispatch: dispatchToEditor,
-  log: (message) => console.log(`[octo-cut] ${message}`),
-  onChange: (status) => broadcast("octo-cut:mcp:status", status),
+  log: (message) => console.log(`[soloman-editor] ${message}`),
+  onChange: (status) => broadcast("soloman-editor:mcp:status", status),
 });
 
 /**
@@ -224,14 +224,14 @@ const mcpServer = createMcpHttpServer({
  * way the MCP listener's are — the renderer subscribes with `onStatus`, and the
  * process that actually owns the ffmpeg child pushes changes up over IPC.
  */
-const broadcaster = createBroadcast((status) => broadcast("octo-cut:broadcast:status", status));
+const broadcaster = createBroadcast((status) => broadcast("soloman-editor:broadcast:status", status));
 
 function registerMcpIpc() {
-  ipcMain.handle("octo-cut:mcp:status", () => mcpServer.status());
-  ipcMain.handle("octo-cut:mcp:start", (_event, port) => mcpServer.listen(port ?? DEFAULT_PORT));
-  ipcMain.handle("octo-cut:mcp:stop", () => mcpServer.stop());
+  ipcMain.handle("soloman-editor:mcp:status", () => mcpServer.status());
+  ipcMain.handle("soloman-editor:mcp:start", (_event, port) => mcpServer.listen(port ?? DEFAULT_PORT));
+  ipcMain.handle("soloman-editor:mcp:stop", () => mcpServer.stop());
 
-  ipcMain.on("octo-cut:mcp:response", (_event, message) => {
+  ipcMain.on("soloman-editor:mcp:response", (_event, message) => {
     const id = message?.id;
     const entry = pendingRequests.get(id);
     if (!entry) return; // already timed out, or a duplicate
@@ -241,26 +241,26 @@ function registerMcpIpc() {
   });
 
   // The editor's own event log, pushed to any client holding GET /mcp open.
-  ipcMain.on("octo-cut:mcp:event", (_event, notification) => mcpServer.notify(notification));
+  ipcMain.on("soloman-editor:mcp:event", (_event, notification) => mcpServer.notify(notification));
 }
 
 const settingsStore = createSettingsStore(app.getPath("userData"));
 const store = createStore(app.getPath("userData"));
 
 function registerStoreIpc() {
-  ipcMain.handle("octo-cut:store:available", () => store.available);
-  ipcMain.handle("octo-cut:store:get", (_event, domain, key) => store.get(domain, key));
-  ipcMain.handle("octo-cut:store:getAll", (_event, domain) => store.getAll(domain));
-  ipcMain.handle("octo-cut:store:count", (_event, domain) => store.count(domain));
-  ipcMain.handle("octo-cut:store:put", (_event, domain, id, value, blob) => store.put(domain, id, value, blob));
-  ipcMain.handle("octo-cut:store:putMany", (_event, domain, records) => store.putMany(domain, records));
-  ipcMain.handle("octo-cut:store:delete", (_event, domain, key) => store.delete(domain, key));
+  ipcMain.handle("soloman-editor:store:available", () => store.available);
+  ipcMain.handle("soloman-editor:store:get", (_event, domain, key) => store.get(domain, key));
+  ipcMain.handle("soloman-editor:store:getAll", (_event, domain) => store.getAll(domain));
+  ipcMain.handle("soloman-editor:store:count", (_event, domain) => store.count(domain));
+  ipcMain.handle("soloman-editor:store:put", (_event, domain, id, value, blob) => store.put(domain, id, value, blob));
+  ipcMain.handle("soloman-editor:store:putMany", (_event, domain, records) => store.putMany(domain, records));
+  ipcMain.handle("soloman-editor:store:delete", (_event, domain, key) => store.delete(domain, key));
 }
 
 function registerSettingsIpc() {
-  ipcMain.handle("octo-cut:settings:get", (_event, key) => settingsStore.get(key));
-  ipcMain.handle("octo-cut:settings:set", (_event, key, value) => settingsStore.set(key, value));
-  ipcMain.handle("octo-cut:settings:getAll", () => settingsStore.getAll());
+  ipcMain.handle("soloman-editor:settings:get", (_event, key) => settingsStore.get(key));
+  ipcMain.handle("soloman-editor:settings:set", (_event, key, value) => settingsStore.set(key, value));
+  ipcMain.handle("soloman-editor:settings:getAll", () => settingsStore.getAll());
 }
 
 /**
@@ -270,13 +270,13 @@ function registerSettingsIpc() {
  * a label + protocol.
  */
 function registerBroadcastIpc() {
-  ipcMain.handle("octo-cut:broadcast:probe", () => broadcaster.probe());
-  ipcMain.handle("octo-cut:broadcast:status", () => broadcaster.status());
-  ipcMain.handle("octo-cut:broadcast:start", (_event, payload) => broadcaster.start(payload ?? {}));
+  ipcMain.handle("soloman-editor:broadcast:probe", () => broadcaster.probe());
+  ipcMain.handle("soloman-editor:broadcast:status", () => broadcaster.status());
+  ipcMain.handle("soloman-editor:broadcast:start", (_event, payload) => broadcaster.start(payload ?? {}));
   // No id → stop every session; an id → stop that one push.
-  ipcMain.handle("octo-cut:broadcast:stop", (_event, id) => broadcaster.stop(id));
+  ipcMain.handle("soloman-editor:broadcast:stop", (_event, id) => broadcaster.stop(id));
   // Timeline broadcasts stream MediaRecorder chunks here, fanned out to ffmpeg's stdin.
-  ipcMain.on("octo-cut:broadcast:chunk", (_event, chunk) => broadcaster.writeChunk(chunk));
+  ipcMain.on("soloman-editor:broadcast:chunk", (_event, chunk) => broadcaster.writeChunk(chunk));
 }
 
 /* ------------------------------------------------------------------ *
@@ -300,7 +300,7 @@ function describeMediaError(error, filePath) {
 }
 
 function registerMediaIpc() {
-  ipcMain.handle("octo-cut:media:read", async (_event, filePath) => {
+  ipcMain.handle("soloman-editor:media:read", async (_event, filePath) => {
     if (typeof filePath !== "string" || filePath.trim() === "") {
       throw new Error("A file path is required.");
     }
@@ -342,15 +342,15 @@ function registerMediaIpc() {
 function registerWindowControlsIpc() {
   const windowOf = (event) => BrowserWindow.fromWebContents(event.sender);
 
-  ipcMain.handle("octo-cut:window:minimize", (event) => windowOf(event)?.minimize());
-  ipcMain.handle("octo-cut:window:toggleMaximize", (event) => {
+  ipcMain.handle("soloman-editor:window:minimize", (event) => windowOf(event)?.minimize());
+  ipcMain.handle("soloman-editor:window:toggleMaximize", (event) => {
     const win = windowOf(event);
     if (!win) return;
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
   });
-  ipcMain.handle("octo-cut:window:close", (event) => windowOf(event)?.close());
-  ipcMain.handle("octo-cut:window:isMaximized", (event) => windowOf(event)?.isMaximized() ?? false);
+  ipcMain.handle("soloman-editor:window:close", (event) => windowOf(event)?.close());
+  ipcMain.handle("soloman-editor:window:isMaximized", (event) => windowOf(event)?.isMaximized() ?? false);
 }
 
 /* ------------------------------------------------------------------ *
@@ -393,7 +393,7 @@ function getGpuUsage() {
 }
 
 function registerSystemIpc() {
-  ipcMain.handle("octo-cut:system:stats", async () => {
+  ipcMain.handle("soloman-editor:system:stats", async () => {
     const memory = process.getSystemMemoryInfo();
     const percentCPUUsage = getCpuUsage();
     const gpuUsage = await getGpuUsage();
@@ -443,7 +443,7 @@ let updateState = { status: "idle", version: null, percent: 0 };
 
 function setUpdateState(patch) {
   updateState = { ...updateState, ...patch };
-  broadcast("octo-cut:update:status", updateState);
+  broadcast("soloman-editor:update:status", updateState);
 }
 
 function loadAutoUpdater() {
@@ -455,23 +455,23 @@ function loadAutoUpdater() {
   try {
     ({ autoUpdater } = require("electron-updater"));
   } catch (error) {
-    console.error(`[octo-cut] electron-updater is not available — ${error?.message ?? error}`);
+    console.error(`[soloman-editor] electron-updater is not available — ${error?.message ?? error}`);
     return null;
   }
   return autoUpdater;
 }
 
 function registerUpdateIpc() {
-  ipcMain.handle("octo-cut:update:status", () => updateState);
-  ipcMain.handle("octo-cut:update:check", () => {
+  ipcMain.handle("soloman-editor:update:status", () => updateState);
+  ipcMain.handle("soloman-editor:update:check", () => {
     const updater = loadAutoUpdater();
     return updater ? updater.checkForUpdates().catch(() => null) : null;
   });
-  ipcMain.handle("octo-cut:update:download", () => {
+  ipcMain.handle("soloman-editor:update:download", () => {
     const updater = loadAutoUpdater();
     return updater ? updater.downloadUpdate().catch(() => null) : null;
   });
-  ipcMain.handle("octo-cut:update:install", () => {
+  ipcMain.handle("soloman-editor:update:install", () => {
     const updater = loadAutoUpdater();
     if (!updater) return;
     setUpdateState({ status: "installing" });
@@ -489,7 +489,7 @@ function startAutoUpdater() {
   updater.on("download-progress", (progress) => setUpdateState({ status: "downloading", percent: Math.round(progress?.percent ?? 0) }));
   updater.on("update-downloaded", (info) => setUpdateState({ status: "downloaded", version: info?.version ?? null, percent: 100 }));
   updater.on("error", (error) => {
-    console.error(`[octo-cut] auto-update failed — ${error?.message ?? error}`);
+    console.error(`[soloman-editor] auto-update failed — ${error?.message ?? error}`);
     setUpdateState({ status: "error" });
   });
 
@@ -523,15 +523,16 @@ function createWindow() {
     minWidth: 1120,
     minHeight: 720,
     show: false,
+    icon: path.join(__dirname, "icon.png"),
     // The editor draws its own dark chrome; a white flash before first paint
     // would be the only light surface in the app.
     backgroundColor: "#0d0d10",
-    title: "Octo Cut",
+    title: "Soloman Editor",
     // The default menu still supplies Ctrl+R and the devtools accelerator, but
     // a "File / Edit / View" bar over a video editor is clutter.
     autoHideMenuBar: true,
     // No native title bar on any platform — the renderer draws its own in
-    // `TopBar.tsx`, wired up over `octo-cut:window:*` below.
+    // `TopBar.tsx`, wired up over `soloman-editor:window:*` below.
     frame: false,
     webPreferences: {
       contextIsolation: true,
@@ -567,7 +568,7 @@ function createWindow() {
   // including when the state changes some other way (a double-click on the
   // bar, or the OS's own snap/tile gestures).
   const notifyMaximizedChange = () => {
-    if (!win.isDestroyed()) win.webContents.send("octo-cut:window:maximized-changed", win.isMaximized());
+    if (!win.isDestroyed()) win.webContents.send("soloman-editor:window:maximized-changed", win.isMaximized());
   };
   win.on("maximize", notifyMaximizedChange);
   win.on("unmaximize", notifyMaximizedChange);
@@ -609,9 +610,9 @@ function createWindow() {
    */
   let failed = false;
   win.webContents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
-    console.error(`[octo-cut] failed to load ${url} — ${description} (${code})`);
+    console.error(`[soloman-editor] failed to load ${url} — ${description} (${code})`);
     if (useDevServer) {
-      console.error(`[octo-cut] is the Vite dev server running on ${DEV_SERVER_URL}?`);
+      console.error(`[soloman-editor] is the Vite dev server running on ${DEV_SERVER_URL}?`);
     }
 
     // A subframe's failure is not the editor's, and -3 is ABORTED, which is what
@@ -629,8 +630,8 @@ function createWindow() {
   // Three lines that make a silent failure legible in the terminal: whether a
   // load was attempted at all, where it was pointed, and whether it landed. A
   // process that never logs even the first of them never got as far as a window.
-  console.log(`[octo-cut] window created — loading ${useDevServer ? DEV_SERVER_URL : `${ORIGIN}/`}`);
-  win.webContents.once("did-finish-load", () => console.log("[octo-cut] editor loaded"));
+  console.log(`[soloman-editor] window created — loading ${useDevServer ? DEV_SERVER_URL : `${ORIGIN}/`}`);
+  win.webContents.once("did-finish-load", () => console.log("[soloman-editor] editor loaded"));
 
   if (useDevServer) {
     void win.loadURL(DEV_SERVER_URL);
@@ -664,7 +665,7 @@ app.whenReady().then(async () => {
   // First line of the app's own log. It is written before anything can go wrong
   // with a window, so its absence means Electron never reached this point at all
   // — which is the difference between "the window is hidden" and "nothing started".
-  console.log(`[octo-cut] electron ${process.versions.electron} ready on ${process.platform} (${process.arch})`);
+  console.log(`[soloman-editor] electron ${process.versions.electron} ready on ${process.platform} (${process.arch})`);
 
   /**
    * Each startup step is guarded on its own, because they used to share one
@@ -676,7 +677,7 @@ app.whenReady().then(async () => {
     try {
       step();
     } catch (error) {
-      console.error(`[octo-cut] could not set up ${what} — ${error?.message ?? error}`, error);
+      console.error(`[soloman-editor] could not set up ${what} — ${error?.message ?? error}`, error);
     }
   };
 
@@ -694,14 +695,14 @@ app.whenReady().then(async () => {
     try {
       await fs.access(path.join(DIST_DIR, "index.html"));
     } catch {
-      console.error(`[octo-cut] No build in ${DIST_DIR}. Run \`pnpm build\` first, or use \`pnpm electron:dev\`.`);
+      console.error(`[soloman-editor] No build in ${DIST_DIR}. Run \`pnpm build\` first, or use \`pnpm electron:dev\`.`);
     }
   }
 
   try {
     createWindow();
   } catch (error) {
-    console.error(`[octo-cut] could not create the window — ${error?.message ?? error}`, error);
+    console.error(`[soloman-editor] could not create the window — ${error?.message ?? error}`, error);
     app.quit();
     return;
   }

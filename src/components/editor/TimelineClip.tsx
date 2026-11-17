@@ -295,7 +295,7 @@ export default function TimelineClip({
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
       className={`group pointer-events-auto absolute top-1 overflow-hidden rounded-md border transition-shadow ${
-        selected ? "border-km-accent shadow-[0_0_0_1px_rgba(59,130,246,0.7)]" : "border-black/40"
+        selected ? "border-km-accent shadow-[0_0_0_1px_rgba(255,255,255,0.55)]" : "border-black/40"
       } ${dimmed ? "opacity-45" : ""}`}
       style={{
         left,
@@ -425,7 +425,7 @@ function TransitionBadge({
         e.stopPropagation();
         onClick();
       }}
-      className={`absolute bottom-0.5 z-10 flex max-w-[calc(100%-6px)] items-center gap-[3px] rounded-sm border border-white/15 bg-black/70 py-[1px] text-[9px] font-medium leading-none text-white/90 backdrop-blur-sm transition hover:border-km-accent hover:bg-km-accent ${
+      className={`absolute bottom-0.5 z-10 flex max-w-[calc(100%-6px)] items-center gap-[3px] rounded-sm border border-white/15 bg-black/70 py-[1px] text-[9px] font-medium leading-none text-km-bg/90 backdrop-blur-sm transition hover:border-km-accent hover:bg-km-accent ${
         edge === "in" ? "left-0.5" : "right-0.5"
       }`}
       style={{ paddingLeft: 3, paddingRight: showLabel ? 4 : 3 }}

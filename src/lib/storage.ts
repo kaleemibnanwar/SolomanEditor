@@ -5,7 +5,7 @@
  *
  *   · SQLite (desktop). The durable store lives in the main process
  *     (`electron/db.cjs`, via `node:sqlite`) and is reached over the
- *     `octoCutHost.store` bridge. This is the real database: a file on disk,
+ *     `solomanEditorHost.store` bridge. This is the real database: a file on disk,
  *     WAL-journalled, with media stored as a BLOB column.
  *   · IndexedDB (web fallback). A plain browser has no Node, so the same API is
  *     answered from IndexedDB — the historical implementation, kept for the web
@@ -30,7 +30,7 @@ export const STREAM_STORE = "streams";
 const ALL_DOMAINS = [PROJECT_STORE, ASSET_STORE, TEMPLATE_STORE, MACRO_STORE, STREAM_STORE] as const;
 type StoreName = (typeof ALL_DOMAINS)[number];
 
-/** The main-process SQLite bridge, published on `window.octoCutHost.store`. */
+/** The main-process SQLite bridge, published on `window.solomanEditorHost.store`. */
 export interface StoreBridge {
   available: () => Promise<boolean>;
   get: (domain: string, key: string) => Promise<{ value: string; blob: Uint8Array | null } | null>;
@@ -41,7 +41,7 @@ export interface StoreBridge {
   delete: (domain: string, key: string) => Promise<void>;
 }
 
-const bridge = (): StoreBridge | null => (typeof window === "undefined" ? null : window.octoCutHost?.store ?? null);
+const bridge = (): StoreBridge | null => (typeof window === "undefined" ? null : window.solomanEditorHost?.store ?? null);
 
 /* ------------------------------------------------------------------ *
  * SQLite backend (desktop)
@@ -88,7 +88,7 @@ async function sqliteDelete(domain: StoreName, key: string): Promise<void> {
  * IndexedDB backend (web fallback + migration source)
  * ------------------------------------------------------------------ */
 
-const DB_NAME = "octo-cut";
+const DB_NAME = "soloman-editor";
 const DB_VERSION = 4;
 
 const memory: Record<StoreName, Map<string, unknown>> = {
@@ -249,7 +249,7 @@ async function migrateIndexedDb(): Promise<void> {
   // Verify every record landed before trusting the copy.
   for (const domain of ALL_DOMAINS) {
     if ((await store.count(domain)) !== expected[domain]) {
-      console.warn(`[octo-cut] storage migration could not be verified for "${domain}" — IndexedDB kept intact.`);
+      console.warn(`[soloman-editor] storage migration could not be verified for "${domain}" — IndexedDB kept intact.`);
       return;
     }
   }
@@ -328,6 +328,6 @@ export async function storagePersists(): Promise<boolean> {
 
 /** Synchronous best guess, for a component that renders before the probe lands. */
 export const storagePersistsSync = (): boolean => {
-  if (typeof window !== "undefined" && window.octoCutHost?.store) return true;
+  if (typeof window !== "undefined" && window.solomanEditorHost?.store) return true;
   return persists === true;
 };

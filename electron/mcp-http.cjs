@@ -249,7 +249,7 @@ function createMcpHttpServer({ dispatch, log = () => {}, onChange = () => {} }) 
       "cache-control": "no-cache, no-transform",
       connection: "keep-alive",
     });
-    res.write(": octo-cut mcp stream — notifications from the editor\n\n");
+    res.write(": soloman-editor mcp stream — notifications from the editor\n\n");
 
     /**
      * The older HTTP+SSE transport has no way to know where to send its POSTs
@@ -288,11 +288,11 @@ function createMcpHttpServer({ dispatch, log = () => {}, onChange = () => {} }) 
   function handleIndex(res) {
     const info = status();
     const body = [
-      "<!doctype html><meta charset='utf-8'><title>Octo Cut — MCP</title>",
+      "<!doctype html><meta charset='utf-8'><title>Soloman Editor — MCP</title>",
       "<style>body{background:#0d0d10;color:#e9e9f0;font:14px/1.6 ui-sans-serif,system-ui;margin:0;padding:48px}",
       "code{color:#93c5fd;font:13px ui-monospace,monospace}li{margin:2px 0}",
       "h1{font-size:17px;margin:0 0 4px}p{margin:0 0 20px;color:#8b8b98}</style>",
-      "<h1>Octo Cut — MCP server</h1>",
+      "<h1>Soloman Editor — MCP server</h1>",
       "<p>The editor is live and answering.</p>",
       "<ul>",
       `<li>Endpoint <code>${info.url}</code> (POST JSON-RPC)</li>`,

@@ -25,7 +25,7 @@ import {
   Upload,
   Wifi,
 } from "lucide-react";
-import octoLogo from "@/assets/octo-logo.png";
+import solomanLogo from "@/assets/soloman-editor-logo.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -74,7 +74,7 @@ function SystemStats() {
   const [stats, setStats] = useState<{ memory: { total: number; free: number; used: number }; cpu: { percentCPUUsage: number }; gpu: number; ping: number } | null>(null);
   
   useEffect(() => {
-    const bridge = typeof window === "undefined" ? undefined : window.octoCutHost?.system;
+    const bridge = typeof window === "undefined" ? undefined : window.solomanEditorHost?.system;
     if (!bridge) return;
     
     let mounted = true;
@@ -162,7 +162,7 @@ function UpdateIndicator() {
         style={NO_DRAG}
         title={`Version ${state.version ?? ""} is ready`}
         onClick={install}
-        className="h-8 gap-1.5 border border-km-border bg-km-raised px-2 text-[11.5px] text-km-text hover:bg-km-accent hover:text-white"
+        className="h-8 gap-1.5 border border-km-border bg-km-raised px-2 text-[11.5px] text-km-text hover:bg-km-accent hover:text-km-bg"
       >
         <Download className="h-3.5 w-3.5" />
         Update ready — restart
@@ -261,21 +261,19 @@ export default function TopBar({
     <header
       style={DRAG_REGION}
       onDoubleClick={onBarDoubleClick}
-      className="flex h-12 shrink-0 items-center gap-3 border-b border-km-border bg-km-panel px-3"
+      className="flex h-[58px] shrink-0 items-center gap-[18px] border-b border-km-border bg-km-panel px-5"
     >
-      <div className="flex items-center gap-2">
-        <img src={octoLogo} alt="" className="h-7 w-7 shrink-0 object-contain" />
-        <span className="text-[13px] font-semibold tracking-tight text-km-text">Octo Cut</span>
+      <div className="flex w-[196px] shrink-0 items-center gap-2.5">
+        <img src={solomanLogo} alt="" className="h-[29px] w-[29px] shrink-0 object-contain drop-shadow-[0_2px_8px_rgba(255,255,255,0.12)]" />
+        <span className="text-[17px] font-extrabold tracking-[-0.055em] text-km-text">Soloman Editor</span>
       </div>
 
-      <div className="mx-1 h-5 w-px bg-km-border" />
-
-      <div data-no-drag style={NO_DRAG} className="flex items-center gap-0.5 rounded-md border border-km-border bg-km-track p-0.5">
+      <div data-no-drag style={NO_DRAG} className="flex items-center gap-1">
         <button
           type="button"
           onClick={() => editor().setUi({ mode: "edit" })}
           aria-pressed={mode === "edit"}
-          className={cn("rounded px-2 py-0.5 text-[11px] transition", mode === "edit" ? "bg-km-raised text-km-text" : "text-km-dim hover:text-km-text")}
+          className={cn("rounded-lg px-3 py-2 text-[12px] transition", mode === "edit" ? "bg-km-raised text-km-text" : "text-km-dim hover:text-km-text")}
         >
           Edit
         </button>
@@ -284,8 +282,8 @@ export default function TopBar({
           onClick={() => editor().setUi({ mode: "image" })}
           aria-pressed={mode === "image"}
           className={cn(
-            "flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition",
-            mode === "image" ? "bg-km-accent text-white" : "text-km-dim hover:text-km-text",
+            "flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] transition",
+            mode === "image" ? "bg-km-raised text-km-text" : "text-km-dim hover:text-km-text",
           )}
         >
           <Image className="h-3 w-3" />
@@ -296,8 +294,8 @@ export default function TopBar({
           onClick={() => editor().setUi({ mode: "broadcast" })}
           aria-pressed={mode === "broadcast"}
           className={cn(
-            "flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition",
-            mode === "broadcast" ? "bg-km-accent text-white" : "text-km-dim hover:text-km-text",
+            "flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] transition",
+            mode === "broadcast" ? "bg-km-raised text-km-text" : "text-km-dim hover:text-km-text",
           )}
         >
           <Radio className="h-3 w-3" />
@@ -307,14 +305,14 @@ export default function TopBar({
 
       {mode === "edit" && (
         <>
-          <div className="mx-1 h-5 w-px bg-km-border" />
+          <div className="h-[22px] w-px bg-km-border" />
 
           <Input
         data-no-drag
         style={NO_DRAG}
         value={settings.name}
         onChange={(e) => editor().updateSettings({ name: e.target.value })}
-        className="h-7 w-56 border-transparent bg-transparent px-2 text-[12.5px] text-km-text hover:border-km-border focus-visible:border-km-border focus-visible:ring-0"
+        className="h-8 w-56 border-transparent bg-transparent px-2 text-[12px] font-semibold text-km-text hover:border-km-border focus-visible:border-km-border focus-visible:ring-0"
         aria-label="Project name"
       />
 
@@ -493,7 +491,7 @@ export default function TopBar({
           size="sm"
           onClick={onExport}
           disabled={exporting}
-          className="h-8 gap-1.5 bg-km-accent text-[12px] text-white hover:bg-km-accent2"
+          className="h-9 gap-2 rounded-lg bg-km-accent px-4 text-[12px] font-bold text-km-bg hover:bg-km-accent2"
         >
           <Upload className="h-3.5 w-3.5" />
           {exporting ? "Exporting…" : "Export"}

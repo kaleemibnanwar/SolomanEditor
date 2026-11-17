@@ -139,11 +139,11 @@ const activeToolByName = (): Map<string, ToolDefinition> => new Map(activeCatalo
  *
  * A reader may return a promise: most resources are a pure function of live
  * store state and answer instantly, but the library lives in IndexedDB, so
- * `octo-cut://projects` cannot. The read path awaits either shape.
+ * `soloman-editor://projects` cannot. The read path awaits either shape.
  */
 const RESOURCE_DEFS: (McpResource & { read: () => unknown | Promise<unknown> })[] = [
   {
-    uri: "octo-cut://playbook",
+    uri: "soloman-editor://playbook",
     name: "playbook",
     title: "How to edit",
     description:
@@ -152,11 +152,11 @@ const RESOURCE_DEFS: (McpResource & { read: () => unknown | Promise<unknown> })[
     read: () => EDITING_PLAYBOOK,
   },
   {
-    uri: "octo-cut://project",
+    uri: "soloman-editor://project",
     name: "project",
     title: "The project document",
     description:
-      "The saved document itself: settings, tracks, and every layer with its raw properties and source in-point. Read this to see what a save would contain; read octo-cut://timeline to see how it plays.",
+      "The saved document itself: settings, tracks, and every layer with its raw properties and source in-point. Read this to see what a save would contain; read soloman-editor://timeline to see how it plays.",
     mimeType: "application/json",
     read: () => {
       const { project } = editor();
@@ -171,7 +171,7 @@ const RESOURCE_DEFS: (McpResource & { read: () => unknown | Promise<unknown> })[
     },
   },
   {
-    uri: "octo-cut://projects",
+    uri: "soloman-editor://projects",
     name: "projects",
     title: "The saved library",
     description:
@@ -180,7 +180,7 @@ const RESOURCE_DEFS: (McpResource & { read: () => unknown | Promise<unknown> })[
     read: () => buildProjects(editor()),
   },
   {
-    uri: "octo-cut://timeline",
+    uri: "soloman-editor://timeline",
     name: "timeline",
     title: "The timeline",
     description:
@@ -189,7 +189,7 @@ const RESOURCE_DEFS: (McpResource & { read: () => unknown | Promise<unknown> })[
     read: () => buildTimeline(editor()),
   },
   {
-    uri: "octo-cut://editor",
+    uri: "soloman-editor://editor",
     name: "editor",
     title: "The live session",
     description:
@@ -198,7 +198,7 @@ const RESOURCE_DEFS: (McpResource & { read: () => unknown | Promise<unknown> })[
     read: () => buildEditorState(editor()),
   },
   {
-    uri: "octo-cut://selection",
+    uri: "soloman-editor://selection",
     name: "selection",
     title: "The current selection",
     description:
@@ -207,7 +207,7 @@ const RESOURCE_DEFS: (McpResource & { read: () => unknown | Promise<unknown> })[
     read: () => buildSelection(editor()),
   },
   {
-    uri: "octo-cut://assets",
+    uri: "soloman-editor://assets",
     name: "assets",
     title: "The media bin",
     description:
@@ -216,7 +216,7 @@ const RESOURCE_DEFS: (McpResource & { read: () => unknown | Promise<unknown> })[
     read: () => buildAssets(editor()),
   },
   {
-    uri: "octo-cut://library",
+    uri: "soloman-editor://library",
     name: "library",
     title: "Every preset id",
     description:
@@ -225,7 +225,7 @@ const RESOURCE_DEFS: (McpResource & { read: () => unknown | Promise<unknown> })[
     read: () => buildLibrary(),
   },
   {
-    uri: "octo-cut://activity",
+    uri: "soloman-editor://activity",
     name: "activity",
     title: "Activity and exports",
     description:

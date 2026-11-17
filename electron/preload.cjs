@@ -27,86 +27,86 @@ const listen = (channel, handler) => {
     } catch (error) {
       // A throwing renderer handler would otherwise surface as an unhandled
       // rejection inside Electron's IPC plumbing, which is much harder to read.
-      console.error(`[octo-cut] ${channel} handler failed`, error);
+      console.error(`[soloman-editor] ${channel} handler failed`, error);
     }
   });
 };
 
-contextBridge.exposeInMainWorld("octoCutHost", {
+contextBridge.exposeInMainWorld("solomanEditorHost", {
   /** A handful of API keys that need to survive a restart. Narrow on purpose: no generic IPC. */
   settings: {
-    get: (key) => ipcRenderer.invoke("octo-cut:settings:get", key),
-    set: (key, value) => ipcRenderer.invoke("octo-cut:settings:set", key, value),
-    getAll: () => ipcRenderer.invoke("octo-cut:settings:getAll"),
+    get: (key) => ipcRenderer.invoke("soloman-editor:settings:get", key),
+    set: (key, value) => ipcRenderer.invoke("soloman-editor:settings:set", key, value),
+    getAll: () => ipcRenderer.invoke("soloman-editor:settings:getAll"),
   },
 
   /** One verb: read a single regular file at a path the agent supplied. */
   media: {
-    read: (filePath) => ipcRenderer.invoke("octo-cut:media:read", filePath),
+    read: (filePath) => ipcRenderer.invoke("soloman-editor:media:read", filePath),
   },
 
   /** The SQLite-backed durable store (projects, media, templates, macros, streams). */
   store: {
-    available: () => ipcRenderer.invoke("octo-cut:store:available"),
-    get: (domain, key) => ipcRenderer.invoke("octo-cut:store:get", domain, key),
-    getAll: (domain) => ipcRenderer.invoke("octo-cut:store:getAll", domain),
-    count: (domain) => ipcRenderer.invoke("octo-cut:store:count", domain),
-    put: (domain, id, value, blob) => ipcRenderer.invoke("octo-cut:store:put", domain, id, value, blob),
-    putMany: (domain, records) => ipcRenderer.invoke("octo-cut:store:putMany", domain, records),
-    delete: (domain, key) => ipcRenderer.invoke("octo-cut:store:delete", domain, key),
+    available: () => ipcRenderer.invoke("soloman-editor:store:available"),
+    get: (domain, key) => ipcRenderer.invoke("soloman-editor:store:get", domain, key),
+    getAll: (domain) => ipcRenderer.invoke("soloman-editor:store:getAll", domain),
+    count: (domain) => ipcRenderer.invoke("soloman-editor:store:count", domain),
+    put: (domain, id, value, blob) => ipcRenderer.invoke("soloman-editor:store:put", domain, id, value, blob),
+    putMany: (domain, records) => ipcRenderer.invoke("soloman-editor:store:putMany", domain, records),
+    delete: (domain, key) => ipcRenderer.invoke("soloman-editor:store:delete", domain, key),
   },
 
   /** Drive the main process's ffmpeg to re-stream a file (or the live timeline). */
   broadcast: {
-    probe: () => ipcRenderer.invoke("octo-cut:broadcast:probe"),
-    status: () => ipcRenderer.invoke("octo-cut:broadcast:status"),
-    start: (payload) => ipcRenderer.invoke("octo-cut:broadcast:start", payload),
-    stop: (id) => ipcRenderer.invoke("octo-cut:broadcast:stop", id),
+    probe: () => ipcRenderer.invoke("soloman-editor:broadcast:probe"),
+    status: () => ipcRenderer.invoke("soloman-editor:broadcast:status"),
+    start: (payload) => ipcRenderer.invoke("soloman-editor:broadcast:start", payload),
+    stop: (id) => ipcRenderer.invoke("soloman-editor:broadcast:stop", id),
     /** A MediaRecorder chunk (timeline broadcast), forwarded to ffmpeg's stdin. */
-    chunk: (payload) => ipcRenderer.send("octo-cut:broadcast:chunk", payload),
-    onStatus: (handler) => listen("octo-cut:broadcast:status", handler),
+    chunk: (payload) => ipcRenderer.send("soloman-editor:broadcast:chunk", payload),
+    onStatus: (handler) => listen("soloman-editor:broadcast:status", handler),
   },
 
   mcp: {
     /** The listener's current state, whether or not it is running. */
-    status: () => ipcRenderer.invoke("octo-cut:mcp:status"),
+    status: () => ipcRenderer.invoke("soloman-editor:mcp:status"),
     /** Start listening, preferring `port`. Resolves with the state it reached. */
-    start: (port) => ipcRenderer.invoke("octo-cut:mcp:start", port),
-    stop: () => ipcRenderer.invoke("octo-cut:mcp:stop"),
+    start: (port) => ipcRenderer.invoke("soloman-editor:mcp:start", port),
+    stop: () => ipcRenderer.invoke("soloman-editor:mcp:stop"),
 
     /** The reply to a request that arrived over HTTP. `null` for a notification. */
-    respond: (id, payload) => ipcRenderer.send("octo-cut:mcp:response", { id, payload }),
+    respond: (id, payload) => ipcRenderer.send("soloman-editor:mcp:response", { id, payload }),
     /** A notification to forward to every client holding an event stream open. */
-    notify: (notification) => ipcRenderer.send("octo-cut:mcp:event", notification),
+    notify: (notification) => ipcRenderer.send("soloman-editor:mcp:event", notification),
 
     /** Inbound HTTP bodies, as `{ id, payload }`. */
-    onRequest: (handler) => listen("octo-cut:mcp:request", handler),
+    onRequest: (handler) => listen("soloman-editor:mcp:request", handler),
     /** The listener changed, without anyone having asked for the new state. */
-    onStatus: (handler) => listen("octo-cut:mcp:status", handler),
+    onStatus: (handler) => listen("soloman-editor:mcp:status", handler),
   },
 
   /** What the OS title bar used to do, now that `frame: false` removed it. */
   windowControls: {
-    minimize: () => ipcRenderer.invoke("octo-cut:window:minimize"),
-    toggleMaximize: () => ipcRenderer.invoke("octo-cut:window:toggleMaximize"),
-    close: () => ipcRenderer.invoke("octo-cut:window:close"),
-    isMaximized: () => ipcRenderer.invoke("octo-cut:window:isMaximized"),
+    minimize: () => ipcRenderer.invoke("soloman-editor:window:minimize"),
+    toggleMaximize: () => ipcRenderer.invoke("soloman-editor:window:toggleMaximize"),
+    close: () => ipcRenderer.invoke("soloman-editor:window:close"),
+    isMaximized: () => ipcRenderer.invoke("soloman-editor:window:isMaximized"),
 
     /** Fires on any change, not just ones made through the two calls above. */
-    onMaximizedChange: (handler) => listen("octo-cut:window:maximized-changed", handler),
+    onMaximizedChange: (handler) => listen("soloman-editor:window:maximized-changed", handler),
   },
 
   /** Machine resources and network checks. */
   system: {
-    stats: () => ipcRenderer.invoke("octo-cut:system:stats"),
+    stats: () => ipcRenderer.invoke("soloman-editor:system:stats"),
   },
 
   /** Auto-update (packaged builds only) — one status shape plus three verbs. */
   update: {
-    status: () => ipcRenderer.invoke("octo-cut:update:status"),
-    check: () => ipcRenderer.invoke("octo-cut:update:check"),
-    download: () => ipcRenderer.invoke("octo-cut:update:download"),
-    install: () => ipcRenderer.invoke("octo-cut:update:install"),
-    onStatus: (handler) => listen("octo-cut:update:status", handler),
+    status: () => ipcRenderer.invoke("soloman-editor:update:status"),
+    check: () => ipcRenderer.invoke("soloman-editor:update:check"),
+    download: () => ipcRenderer.invoke("soloman-editor:update:download"),
+    install: () => ipcRenderer.invoke("soloman-editor:update:install"),
+    onStatus: (handler) => listen("soloman-editor:update:status", handler),
   },
 });

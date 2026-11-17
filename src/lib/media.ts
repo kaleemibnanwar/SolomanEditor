@@ -492,7 +492,7 @@ function drawDemoFrame(ctx: CanvasRenderingContext2D, t: number, w: number, h: n
   ctx.font = "700 64px Inter, system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("OCTO CUT", w / 2, h / 2 - 24);
+  ctx.fillText("SOLOMAN EDITOR", w / 2, h / 2 - 24);
   ctx.font = "400 28px Inter, system-ui, sans-serif";
   ctx.fillText("generated demo clip", w / 2, h / 2 + 40);
 }

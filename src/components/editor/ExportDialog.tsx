@@ -63,13 +63,13 @@ const isActive = (job: ExportJob) =>
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
 function defaultFileName(projectName: string) {
-  const base = (projectName || "octo-cut")
+  const base = (projectName || "soloman-editor")
     .trim()
     .toLowerCase()
     .replace(/[^\w\-. ]+/g, "")
     .replace(/\s+/g, "-");
   const stamp = new Date().toISOString().slice(0, 10);
-  return `${base || "octo-cut"}-${stamp}`;
+  return `${base || "soloman-editor"}-${stamp}`;
 }
 
 /* ------------------------------------------------------------------ *
@@ -162,7 +162,7 @@ function ExportPanel({ onClose }: { onClose: () => void }) {
       rangeEnd: range.end,
       includeAudio,
       format,
-      fileName: fileName.trim() || "octo-cut-export",
+      fileName: fileName.trim() || "soloman-editor-export",
     });
     toast.success("Added to the export queue", {
       description: `${size.width}×${size.height} · ${formatDurationLong(span)} · about ${formatBytes(estimatedSize)}`,
@@ -240,7 +240,7 @@ function ExportPanel({ onClose }: { onClose: () => void }) {
             <Input
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              placeholder="octo-cut-export"
+              placeholder="soloman-editor-export"
               className="h-7 rounded border-km-border bg-km-track px-2 text-[12px] text-km-text placeholder:text-km-faint focus-visible:ring-1 focus-visible:ring-km-accent"
             />
           </label>
@@ -317,7 +317,7 @@ function ExportPanel({ onClose }: { onClose: () => void }) {
         <Button
           onClick={enqueue}
           disabled={!support.supported}
-          className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] font-medium text-white hover:bg-km-accent2"
+          className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] font-medium text-km-bg hover:bg-km-accent2"
         >
           <Film className="h-3.5 w-3.5" />
           Add to queue
@@ -334,7 +334,7 @@ function ExportPanel({ onClose }: { onClose: () => void }) {
 function SubtitlesRow() {
   const project = useEditor((s) => s.project);
   const trackId = captionsTrackId(project);
-  const projectName = project.settings.name || "octo-cut";
+  const projectName = project.settings.name || "soloman-editor";
 
   const download = (format: "srt" | "vtt") => {
     if (!trackId) return;

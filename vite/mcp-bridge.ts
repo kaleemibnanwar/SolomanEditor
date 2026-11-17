@@ -17,7 +17,7 @@
  * Two guards, both of them borrowed from the desktop app:
  *
  *   · THE MCP ENDPOINT ANSWERS LOOPBACK HOSTS ONLY, plus the one origin the page
- *     itself announced at boot (`POST /__octo-cut/mcp/hello`). That second case is
+ *     itself announced at boot (`POST /__soloman-editor/mcp/hello`). That second case is
  *     what keeps the URL in the panel honest under a proxy: a dev server reached
  *     on some other hostname would otherwise advertise an endpoint it then
  *     refused. Announcing is safe because the bridge refuses cross-site callers —
@@ -47,7 +47,7 @@ const MCP_PATH = "/mcp";
 /** An alias for the same endpoint, because clients append `/sse` to a base URL. */
 const SSE_PATH = "/sse";
 /** The page's own channel: it polls here for requests and posts replies back. */
-const BRIDGE_PREFIX = "/__octo-cut/mcp";
+const BRIDGE_PREFIX = "/__soloman-editor/mcp";
 
 /** Hostnames that mean "this machine". Anything else must have announced itself. */
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -214,7 +214,7 @@ function createHandler(): Middleware {
 
   const connected = (): boolean => {
     const result = waiting.length > 0 || Date.now() - lastPollAt < CONNECTION_GRACE_MS;
-    console.log(`[octo-cut debug] connected() -> ${result}, waiting=${waiting.length}, lastPollAt=${lastPollAt}, now=${Date.now()}, delta=${Date.now() - lastPollAt}`);
+    console.log(`[soloman-editor debug] connected() -> ${result}, waiting=${waiting.length}, lastPollAt=${lastPollAt}, now=${Date.now()}, delta=${Date.now() - lastPollAt}`);
     return result;
   };
 
@@ -423,7 +423,7 @@ function createHandler(): Middleware {
       "cache-control": "no-cache, no-transform",
       connection: "keep-alive",
     });
-    res.write(": octo-cut mcp stream — notifications from the editor\n\n");
+    res.write(": soloman-editor mcp stream — notifications from the editor\n\n");
 
     /**
      * The older HTTP+SSE transport has no way to know where to send its POSTs
@@ -456,11 +456,11 @@ function createHandler(): Middleware {
   function handleIndex(res: ServerResponse): void {
     const info = status();
     const body = [
-      "<!doctype html><meta charset='utf-8'><title>Octo Cut — MCP</title>",
+      "<!doctype html><meta charset='utf-8'><title>Soloman Editor — MCP</title>",
       "<style>body{background:#0d0d10;color:#e9e9f0;font:14px/1.6 ui-sans-serif,system-ui;margin:0;padding:48px}",
       "code{color:#93c5fd;font:13px ui-monospace,monospace}li{margin:2px 0}",
       "h1{font-size:17px;margin:0 0 4px}p{margin:0 0 20px;color:#8b8b98}</style>",
-      "<h1>Octo Cut — MCP server</h1>",
+      "<h1>Soloman Editor — MCP server</h1>",
       "<p>The editor is live and answering, from the dev server.</p>",
       "<ul>",
       "<li>Endpoint <code>/mcp</code> (POST JSON-RPC)</li>",
@@ -486,7 +486,7 @@ function createHandler(): Middleware {
     // it says whether the request arrived at all, and what it asked for. A client
     // that never appears here never reached this port, which no amount of
     // inspection on the client side can tell you.
-    console.log(`[octo-cut] ${req.method} ${path} · accept: ${String(req.headers.accept ?? "(none)")}`);
+    console.log(`[soloman-editor] ${req.method} ${path} · accept: ${String(req.headers.accept ?? "(none)")}`);
 
     if (!listening) {
       // In an envelope rather than prose: a client that is parsing JSON-RPC
@@ -551,16 +551,16 @@ function createHandler(): Middleware {
  * and those two need opposite fixes.
  */
 function announce(kind: string): void {
-  console.log(`[octo-cut] MCP endpoint mounted on the ${kind} server — POST /mcp for JSON-RPC, GET /mcp for a stream.`);
+  console.log(`[soloman-editor] MCP endpoint mounted on the ${kind} server — POST /mcp for JSON-RPC, GET /mcp for a stream.`);
 }
 
 /**
  * Registered for the dev and preview servers. `/` and every app route are left
- * alone — only `/mcp` and the page's own `__octo-cut` channel are ours.
+ * alone — only `/mcp` and the page's own `__soloman-editor` channel are ours.
  */
 export function mcpBridge(): Plugin {
   return {
-    name: "octo-cut:mcp-bridge",
+    name: "soloman-editor:mcp-bridge",
     configureServer(server) {
       server.middlewares.use(createHandler());
       announce("dev");

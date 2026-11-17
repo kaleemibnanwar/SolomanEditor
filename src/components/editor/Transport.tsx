@@ -38,7 +38,7 @@ export default function Transport() {
   };
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-3 border-t border-km-border bg-km-panel px-3">
+    <div className="flex h-[58px] shrink-0 items-center gap-3 border-t border-km-border bg-km-panel px-[18px]">
       <TransportButton title="Go to start (Home)" onClick={() => editor().setCurrentTime(0)}>
         <ChevronFirst className="h-4 w-4" />
       </TransportButton>
@@ -52,7 +52,7 @@ export default function Transport() {
           void resumeAudioContext();
           editor().togglePlay();
         }}
-        className="grid h-10 w-10 place-items-center rounded-full bg-km-accent text-white shadow-lg shadow-km-accent/25 transition hover:brightness-110"
+        className="grid h-9 w-9 place-items-center rounded-full bg-km-accent text-km-bg transition hover:bg-km-accent2"
         title="Play / pause (Space)"
       >
         {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
@@ -81,7 +81,7 @@ export default function Transport() {
       </TransportButton>
 
       <div className="ml-2 flex items-baseline gap-2 font-mono">
-        <span className="text-sm tabular-nums text-km-text">{formatTimecode(currentTime)}</span>
+        <span className="text-[11px] tabular-nums text-km-text">{formatTimecode(currentTime)}</span>
         <span className="text-[11px] text-km-faint">/ {formatTimecode(duration)}</span>
       </div>
 

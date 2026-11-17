@@ -12,9 +12,9 @@
 # the metadata a platform installer needs (author, homepage, description,
 # license) comes from `package.json`, not from here.
 
-appId: com.octocut.app
-productName: Octo Cut
-copyright: Copyright © Octo Cut
+appId: com.solomaneditor.app
+productName: Soloman Editor
+copyright: Copyright © Soloman Editor
 
 directories:
   output: release
@@ -22,13 +22,13 @@ directories:
 
 # Auto-update feed. The updater (`electron-updater` in `electron/main.cjs`)
 # reads the `latest*.yml` files electron-builder uploads to GitHub Releases here.
-# The owner/repo point at the PUBLIC release repo (`octocut`), which is where
+# The owner/repo point at the PUBLIC release repo (`solomaneditor`), which is where
 # binaries are distributed and where the updater looks — never the private
 # source repo.
 publish:
   provider: github
   owner: kaleemibnanwar
-  repo: octocut
+  repo: solomaneditor
   publishAutoUpdate: true
 
 # Write `latest.yml`, `beta.yml`, `alpha.yml` so the updater can follow whatever
@@ -82,4 +82,4 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  shortcutName: Octo Cut
+  shortcutName: Soloman Editor

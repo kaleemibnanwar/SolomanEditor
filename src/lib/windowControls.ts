@@ -1,6 +1,6 @@
 /**
  * The desktop window's own minimize / maximize / close, reached through the
- * narrow `window.octoCutHost.windowControls` bridge (see `electron/preload.cjs`).
+ * narrow `window.solomanEditorHost.windowControls` bridge (see `electron/preload.cjs`).
  *
  * `electron/main.cjs` opens the window with `frame: false`, so there is no OS
  * title bar to do this job — `TopBar.tsx` draws its own and calls through here.
@@ -17,9 +17,9 @@ export interface WindowControlsBridge {
   onMaximizedChange: (handler: (maximized: boolean) => void) => void;
 }
 
-// The `Window.octoCutHost` shape itself is declared once, in `mcp/host.ts` —
+// The `Window.solomanEditorHost` shape itself is declared once, in `mcp/host.ts` —
 // see the comment there for why a second `declare global` here would conflict
 // instead of merging.
 
 export const windowControls = (): WindowControlsBridge | null =>
-  typeof window === "undefined" ? null : (window.octoCutHost?.windowControls ?? null);
+  typeof window === "undefined" ? null : (window.solomanEditorHost?.windowControls ?? null);

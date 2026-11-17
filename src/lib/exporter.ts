@@ -84,7 +84,7 @@ function chooseMime(format: ExportOptions["format"]): string {
 export const extensionFor = (mime: string) => (mime.includes("mp4") ? "mp4" : "webm");
 
 const safeName = (name: string) =>
-  (name.trim() || "octo-cut-export").replace(/[^\w\-. ]+/g, "").replace(/\s+/g, "-").slice(0, 64);
+  (name.trim() || "soloman-editor-export").replace(/[^\w\-. ]+/g, "").replace(/\s+/g, "-").slice(0, 64);
 
 /* ------------------------------------------------------------------ *
  * Audio: decode once per asset, cache on the asset record

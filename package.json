@@ -1,9 +1,9 @@
 {
-  "name": "octo-cut",
+  "name": "soloman-editor",
   "version": "2.6.10",
   "description": "A non-destructive video editor that runs on your desktop",
-  "homepage": "https://octocut.app",
-  "desktopName": "octo-cut.desktop",
+  "homepage": "https://solomaneditor.app",
+  "desktopName": "soloman-editor.desktop",
   "author": {
     "name": "kaleemibnanwar",
     "email": "kaleemibnanwar@gmail.com"
@@ -14,7 +14,7 @@
   "main": "electron/main.cjs",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kaleemibnanwar/octocut-source.git"
+    "url": "https://github.com/kaleemibnanwar/solomaneditor-source.git"
   },
   "scripts": {
     "dev": "vite",

@@ -1,6 +1,6 @@
 # Build, Release & Auto-Update
 
-How Octo Cut ships. This repo uses **electron-builder** + **electron-updater** (not
+How Soloman Editor ships. This repo uses **electron-builder** + **electron-updater** (not
 Electron Forge) — the pipeline below is derived from this repo's actual config.
 
 ---
@@ -29,11 +29,11 @@ must live on a public repo**.
 
 | Repo | Purpose | Contents |
 |---|---|---|
-| `kaleemibnanwar/octocut-source` (private) | Development | Full source, history, CI |
-| `kaleemibnanwar/octocut` (public) | Distribution | Download-page README + GitHub Releases with binaries |
+| `kaleemibnanwar/solomaneditor-source` (private) | Development | Full source, history, CI |
+| `kaleemibnanwar/solomaneditor` (public) | Distribution | Download-page README + GitHub Releases with binaries |
 
 The `publish` block in `electron-builder.yml` points `owner: kaleemibnanwar, repo:
-octocut` — the **public** repo — so `latest*.yml` and the installers are uploaded
+solomaneditor` — the **public** repo — so `latest*.yml` and the installers are uploaded
 there, and `electron-updater` reads them from there. The private repo never hosts the
 update feed.
 
@@ -42,15 +42,15 @@ page from `docs/public-repo/`, not the source):
 
 ```bash
 # private — the source repo you are already in
-git remote add origin git@github.com:kaleemibnanwar/octocut-source.git
+git remote add origin git@github.com:kaleemibnanwar/solomaneditor-source.git
 git push -u origin main
 
 # public — releases only
-mkdir -p /tmp/octocut-public && cp -r docs/public-repo/. /tmp/octocut-public/
-cd /tmp/octocut-public
+mkdir -p /tmp/solomaneditor-public && cp -r docs/public-repo/. /tmp/solomaneditor-public/
+cd /tmp/solomaneditor-public
 git init && git add . && git commit -m "first commit"
 git branch -M main
-git remote add origin git@github.com:kaleemibnanwar/octocut.git
+git remote add origin git@github.com:kaleemibnanwar/solomaneditor.git
 git push -u origin main
 ```
 
@@ -106,7 +106,7 @@ The updater only exists in a **packaged** build (`app.isPackaged`), so `pnpm dev
 
 | Secret | Used by | Required? |
 |---|---|---|
-| `PUBLIC_REPO_TOKEN` | publish to `kaleemibnanwar/octocut` | **yes** (a PAT with `contents: write` on the public repo) |
+| `PUBLIC_REPO_TOKEN` | publish to `kaleemibnanwar/solomaneditor` | **yes** (a PAT with `contents: write` on the public repo) |
 | `GITHUB_TOKEN` | mirror to the source repo | auto-provided |
 | `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD` | macOS code signing (base64 `.p12` + password) | optional — unsigned without them |
 | `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` | Windows code signing (base64 `.pfx` + password) | optional — unsigned without them |
@@ -153,18 +153,18 @@ base64**, because CI has no access to your keychain.
    # macOS ships BSD base64 which wraps at 76 chars — strip the newlines:
    base64 -i DeveloperIDApplication.p12 | tr -d '\n'
 
-   gh secret set MAC_CSC_LINK --repo kaleemibnanwar/octocut-source --body "$(base64 -w0 DeveloperIDApplication.p12)"
-   gh secret set MAC_CSC_KEY_PASSWORD --repo kaleemibnanwar/octocut-source --body "<p12 password>"
+   gh secret set MAC_CSC_LINK --repo kaleemibnanwar/solomaneditor-source --body "$(base64 -w0 DeveloperIDApplication.p12)"
+   gh secret set MAC_CSC_KEY_PASSWORD --repo kaleemibnanwar/solomaneditor-source --body "<p12 password>"
    ```
 5. Notarization credentials — an **App Store Connect API key** (team-scoped, no
    expiry, the automation-friendly path). Create it under **App Store Connect →
    Users and Access → Integrations → API Keys** (Developer access) and download the
    `.p8`. The workflow reads it base64 so the multiline key survives `GITHUB_ENV`:
    ```bash
-   gh secret set APPLE_API_KEY_BASE64 --repo kaleemibnanwar/octocut-source --body "$(base64 -w0 AuthKey_XXXX.p8)"
-   gh secret set APPLE_API_KEY_ID --repo kaleemibnanwar/octocut-source --body "KEYID"       # e.g. CRPZB6A7XX
-   gh secret set APPLE_API_ISSUER --repo kaleemibnanwar/octocut-source --body "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-   gh secret set APPLE_TEAM_ID --repo kaleemibnanwar/octocut-source --body "BR8AR3UC53"
+   gh secret set APPLE_API_KEY_BASE64 --repo kaleemibnanwar/solomaneditor-source --body "$(base64 -w0 AuthKey_XXXX.p8)"
+   gh secret set APPLE_API_KEY_ID --repo kaleemibnanwar/solomaneditor-source --body "KEYID"       # e.g. CRPZB6A7XX
+   gh secret set APPLE_API_ISSUER --repo kaleemibnanwar/solomaneditor-source --body "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+   gh secret set APPLE_TEAM_ID --repo kaleemibnanwar/solomaneditor-source --body "BR8AR3UC53"
    ```
    The workflow decodes `APPLE_API_KEY_BASE64` to a file and points `APPLE_API_KEY`
    at it, so `notarytool` gets a path. (An Apple ID + app-specific password works
@@ -178,8 +178,8 @@ base64**, because CI has no access to your keychain.
 2. Export it as a `.pfx` (with password) from the CA's portal or `certmgr.msc`.
 3. Add the secrets:
    ```bash
-   gh secret set WIN_CSC_LINK --repo kaleemibnanwar/octocut-source --body "$(base64 -w0 cert.pfx)"
-   gh secret set WIN_CSC_KEY_PASSWORD --repo kaleemibnanwar/octocut-source --body "<pfx password>"
+   gh secret set WIN_CSC_LINK --repo kaleemibnanwar/solomaneditor-source --body "$(base64 -w0 cert.pfx)"
+   gh secret set WIN_CSC_KEY_PASSWORD --repo kaleemibnanwar/solomaneditor-source --body "<pfx password>"
    ```
 
 Notarization is detected automatically: if the `APPLE_*` secrets are present,
@@ -192,7 +192,7 @@ changes are needed — the workflow's per-OS steps feed the env vars in.
 Ubuntu development machine (tag a release)
         │  git push --tags
         ▼
-GitHub (kaleemibnanwar/octocut-source)
+GitHub (kaleemibnanwar/solomaneditor-source)
         │  release.yml matrix picks the macOS runner
         ▼
 GitHub Actions macOS runner
@@ -203,7 +203,7 @@ electron-builder builds + signs the .app
         ▼
 notarytool notarization + staple
         ▼
-Release .zip (auto-update) + .dmg on kaleemibnanwar/octocut
+Release .zip (auto-update) + .dmg on kaleemibnanwar/solomaneditor
 ```
 
 The `.dmg` and `.zip` cover normal distribution and notarization. A `.pkg` is not
@@ -214,7 +214,7 @@ Developer ID Application certificate used for the app cannot sign that container
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Updater never finds an update | Feed repo is wrong or private | `publish.owner/repo` must be `kaleemibnanwar/octocut` (public); verify `app-update.yml` inside `release/*-unpacked/resources` |
+| Updater never finds an update | Feed repo is wrong or private | `publish.owner/repo` must be `kaleemibnanwar/solomaneditor` (public); verify `app-update.yml` inside `release/*-unpacked/resources` |
 | Windows/mac auto-update silently broken | Artifacts renamed after build | Upload the exact filenames from `release/`, `latest.yml` references them |
 | `.deb` build fails on CI | `fpm`/native deps missing | use `ubuntu-latest`; the workflow already does |
 | `pnpm install --frozen-lockfile` fails in CI | lockfile out of date | run `pnpm install` locally and commit the lockfile |

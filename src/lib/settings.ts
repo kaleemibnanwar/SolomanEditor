@@ -2,7 +2,7 @@
  * The stock-media provider API keys, which need to survive a restart.
  *
  * The desktop app persists these to disk via `electron/settings-store.cjs`,
- * reached through the narrow `window.octoCutHost.settings` bridge. A plain
+ * reached through the narrow `window.solomanEditorHost.settings` bridge. A plain
  * browser tab (`pnpm dev`, or a static build with no Electron host at all) has
  * no main process to ask, so it falls back to `localStorage` — the same
  * degrade-gracefully shape `mcp/host.ts` already uses when neither host exists.
@@ -23,9 +23,9 @@ export const SETTING_KEYS: SettingKey[] = ["pixabayApiKey", "pexelsApiKey", "tel
 
 export type SettingsValues = Record<SettingKey, string>;
 
-const LOCAL_STORAGE_PREFIX = "octo-cut:setting:";
+const LOCAL_STORAGE_PREFIX = "soloman-editor:setting:";
 
-const bridge = () => (typeof window === "undefined" ? undefined : window.octoCutHost?.settings);
+const bridge = () => (typeof window === "undefined" ? undefined : window.solomanEditorHost?.settings);
 
 /* ------------------------------------------------------------------ *
  * Storage

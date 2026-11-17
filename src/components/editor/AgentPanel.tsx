@@ -89,7 +89,7 @@ export default function AgentPanel({ open, onOpenChange }: { open: boolean; onOp
 
   /** Introduce ourselves once, so the panel sees what a host is actually told. */
   useEffect(() => {
-    void agentClient.initialize("octo-cut panel").then(setHandshake).catch(() => setHandshake(null));
+    void agentClient.initialize("soloman-editor panel").then(setHandshake).catch(() => setHandshake(null));
   }, []);
 
   const tool = useMemo(() => agentServer.tools.find((entry) => entry.name === toolName), [toolName]);
@@ -194,7 +194,7 @@ export default function AgentPanel({ open, onOpenChange }: { open: boolean; onOp
   };
 
   const snippet = `// The editor is an MCP server. Reach it from a console:
-await window.octoCutMcp.client.callTool("get_timeline")
+await window.solomanEditorMcp.client.callTool("get_timeline")
 
 ${
   remote.url
@@ -420,7 +420,7 @@ target.postMessage({ type: "${descriptor.channel}", payload: {
               size="sm"
               onClick={() => void runTool()}
               disabled={busy}
-              className="h-7 gap-1.5 bg-km-accent text-[11.5px] text-white hover:bg-km-accent2"
+              className="h-7 gap-1.5 bg-km-accent text-[11.5px] text-km-bg hover:bg-km-accent2"
             >
               <Play className="h-3 w-3" />
               {busy ? "Running…" : "Run call"}
@@ -435,7 +435,7 @@ target.postMessage({ type: "${descriptor.channel}", payload: {
                   title={resource.description}
                   className="rounded border border-km-border px-1.5 py-0.5 font-mono text-[10px] text-km-dim transition hover:bg-km-raised hover:text-km-text"
                 >
-                  {resource.uri.replace("octo-cut://", "")}
+                  {resource.uri.replace("soloman-editor://", "")}
                 </button>
               ))}
             </div>
@@ -536,7 +536,7 @@ function RemoteBar({
             "h-6 shrink-0 gap-1 px-2 text-[10.5px]",
             status.running
               ? "bg-km-raised text-km-text hover:bg-km-panel2"
-              : "bg-km-accent text-white hover:bg-km-accent2",
+              : "bg-km-accent text-km-bg hover:bg-km-accent2",
           )}
         >
           <Plug className="h-3 w-3" />

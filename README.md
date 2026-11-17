@@ -1,14 +1,14 @@
 <p align="center">
-  <img src="src/assets/octo-logo.png" alt="Octo Cut logo" width="220" />
+  <img src="src/assets/soloman-editor-logo.png" alt="Soloman Editor logo" width="220" />
 </p>
 
-# Octo Cut
+# Soloman Editor
 
 A video editor that runs entirely in the browser. Import clips, images and audio, arrange them on a
 multi-track timeline, animate them with keyframes, and export a real video file — no upload, no
 server, no account. Your media never leaves your machine.
 
-> **Octo Cut is fully client-side.** Rendering and video encoding both happen in the tab, using
+> **Soloman Editor is fully client-side.** Rendering and video encoding both happen in the tab, using
 > Canvas 2D, Web Audio and `MediaRecorder`.
 
 ---
@@ -98,16 +98,16 @@ The main process narrates its own boot, because a window that never appears is o
 indistinguishable from a process that never started. Three lines, in order:
 
 ```
-[octo-cut] electron 44.3.0 ready on darwin (arm64)   ← Electron reached `app.whenReady`
-[octo-cut] window created — loading http://localhost:8080
-[octo-cut] editor loaded                              ← the first load finished
+[soloman-editor] electron 44.3.0 ready on darwin (arm64)   ← Electron reached `app.whenReady`
+[soloman-editor] window created — loading http://localhost:8080
+[soloman-editor] editor loaded                              ← the first load finished
 ```
 
 Read the first one you are missing. No line at all means Electron itself never started — usually an
 incomplete `electron` install (`pnpm install` runs its postinstall download) or an environment with
 no display. `window created` without `editor loaded` means the window exists and its load failed; the
 window is still shown, on a four-second fallback timer, and displays the reason. And a window that
-appears on its own saying *Octo Cut could not load the editor* is the editor bundle failing rather
+appears on its own saying *Soloman Editor could not load the editor* is the editor bundle failing rather
 than Electron: it names the URL and the error code, and the terminal says so too.
 
 ---
@@ -115,7 +115,7 @@ than Electron: it names the URL and the error code, and the terminal says so too
 ## Releases & auto-update
 
 The desktop app ships through a two-repository setup: source lives in the private
-`octocut-source` repo, and installers are published to the public `octocut` repo, where
+`solomaneditor-source` repo, and installers are published to the public `solomaneditor` repo, where
 `electron-updater` reads its feed. On macOS and Windows the app checks for updates at
 launch and hourly, downloads them in the background, and shows an "Update ready —
 restart" button in the top bar. Linux updates are manual.
@@ -222,7 +222,7 @@ is handed on connect. The agent panel in the top bar is a client of that same se
 can do, an external tool can do identically.
 There are two ways in.
 
-**The window bridge.** A `postMessage` bridge on the `octo-cut:mcp` channel, for a host that already
+**The window bridge.** A `postMessage` bridge on the `soloman-editor:mcp` channel, for a host that already
 has a handle on the page — a wrapper window, an extension, the agent panel itself. Nothing to
 configure.
 
@@ -244,7 +244,7 @@ and both are transports and nothing more:
 - **`electron/mcp-http.cjs`** binds `127.0.0.1` in the Electron **main process**. Every JSON-RPC
   message is forwarded over IPC to the renderer, where `src/lib/mcp/server.ts` answers it.
 - **`vite/mcp-bridge.ts`** hangs the same endpoint off the port Vite is already using, so a plain
-  browser tab serves one too. The page holds a long poll open (`/__octo-cut/mcp/next`); the plugin
+  browser tab serves one too. The page holds a long poll open (`/__soloman-editor/mcp/next`); the plugin
   hands it each incoming message and carries the reply back to the waiting client.
 
 Either way the tool catalogue never crosses the boundary, and there is exactly one definition of

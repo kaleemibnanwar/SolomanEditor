@@ -26,7 +26,7 @@ export interface UpdateState {
   percent: number;
 }
 
-/** The narrow bridge `electron/preload.cjs` exposes as `octoCutHost.update`. */
+/** The narrow bridge `electron/preload.cjs` exposes as `solomanEditorHost.update`. */
 export interface UpdateBridge {
   status: () => Promise<UpdateState>;
   check: () => Promise<unknown>;
@@ -43,7 +43,7 @@ let subscribed = false;
 const listeners = new Set<() => void>();
 
 const bridge = (): UpdateBridge | undefined =>
-  typeof window === "undefined" ? undefined : window.octoCutHost?.update;
+  typeof window === "undefined" ? undefined : window.solomanEditorHost?.update;
 
 function emit(next: UpdateState) {
   state = next;

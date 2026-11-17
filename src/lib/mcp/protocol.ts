@@ -18,7 +18,7 @@ export const MCP_PROTOCOL_VERSION = "2025-06-18";
 /** Versions we can speak. A client asking for one of these is answered in kind. */
 export const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"] as const;
 
-export const SERVER_INFO = { name: "octo-cut", version: "1.0.0", title: "Octo Cut editor" } as const;
+export const SERVER_INFO = { name: "soloman-editor", version: "1.0.0", title: "Soloman Editor editor" } as const;
 
 /* ------------------------------------------------------------------ *
  * JSON-RPC 2.0

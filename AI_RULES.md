@@ -28,7 +28,7 @@ Available packages and libraries:
   - **Desktop**: `electron/mcp-http.cjs` binds 127.0.0.1 in the main process, bridged over
     `electron/preload.cjs`.
   - **Browser**: `vite/mcp-bridge.ts` hangs the same endpoint off the Vite dev/preview port, bridged
-    over the `/__octo-cut/mcp/*` long-poll routes. Renderer half: `src/lib/mcp/browserHost.ts`;
+    over the `/__soloman-editor/mcp/*` long-poll routes. Renderer half: `src/lib/mcp/browserHost.ts`;
     both hosts are adopted behind one interface in `src/lib/mcp/host.ts`.
 - Tools live in `src/lib/mcp/` only — never duplicate editor logic in a listener file.
 - The two listeners' routing must stay in step (`/mcp`, `/sse` as the older alias that announces

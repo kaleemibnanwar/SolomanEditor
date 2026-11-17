@@ -90,10 +90,14 @@ export function mediaLayerDefaults(asset: Asset, settings: ProjectSettings, star
   const natH = asset.height || settings.height;
   const isAudio = asset.kind === "audio";
   const fit = Math.min(settings.width / natW, settings.height / natH);
+  const sourceDuration = asset.duration && asset.duration > 0 ? asset.duration : 5;
   return {
     assetId: asset.id,
     startTime,
-    duration: asset.kind === "image" ? 5 : Math.min(asset.duration ?? 5, 60),
+    // Source media should land on the timeline at its natural length. The old
+    // 60-second cap made multi-hour files appear to contain only their opening
+    // minute even though the browser had loaded the full asset.
+    duration: asset.kind === "image" ? 5 : sourceDuration,
     name: asset.name,
     transform: {
       x: settings.width / 2,
@@ -223,12 +227,12 @@ export function snapValue(value: number, targets: number[], tolerance: number): 
  * ------------------------------------------------------------------ */
 
 export const LAYER_COLORS: Record<LayerType, string> = {
-  video: "#3b82f6",
-  image: "#22c55e",
-  text: "#f5a524",
-  audio: "#a855f7",
-  sticker: "#ec4899",
-  effect: "#14b8a6",
+  video: "#6a6b6f",
+  image: "#77797d",
+  text: "#85868a",
+  audio: "#656b6f",
+  sticker: "#737479",
+  effect: "#5f6266",
 };
 
 export const LAYER_LABELS: Record<LayerType, string> = {

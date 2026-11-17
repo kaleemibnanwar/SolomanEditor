@@ -72,7 +72,7 @@ export function createLoopbackClient(server: McpServer): McpClient {
 
   return {
     request,
-    initialize: async (clientName = "octo-cut panel") => {
+    initialize: async (clientName = "soloman-editor panel") => {
       const result = (await request("initialize", {
         protocolVersion: "2025-06-18",
         capabilities: {},
@@ -95,7 +95,7 @@ export function createLoopbackClient(server: McpServer): McpClient {
  * ------------------------------------------------------------------ */
 
 /** The default channel. A host posts `{ type: CHANNEL, payload: <message> }`. */
-export const BRIDGE_CHANNEL = "octo-cut:mcp";
+export const BRIDGE_CHANNEL = "soloman-editor:mcp";
 
 /** What a host gets back when it announces itself on the channel. */
 export interface AgentDescriptor {
@@ -153,7 +153,7 @@ export function attachWindowBridge(server: McpServer, options: WindowBridgeOptio
     options.onEvent?.({ at: Date.now(), kind, text, detail });
 
   const descriptor = (): AgentDescriptor => ({
-    server: "octo-cut",
+    server: "soloman-editor",
     protocolVersion: server.state().protocolVersion,
     channel,
     tools: server.tools.length,

@@ -296,7 +296,7 @@ export default function BroadcastStudio() {
                 Stop all
               </Button>
             ) : (
-              <Button size="sm" onClick={() => setStreams((prev) => [...prev, newStream()])} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-white hover:bg-km-accent2">
+              <Button size="sm" onClick={() => setStreams((prev) => [...prev, newStream()])} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-km-bg hover:bg-km-accent2">
                 <Plus className="h-3.5 w-3.5" />
                 Add stream
               </Button>
@@ -315,7 +315,7 @@ export default function BroadcastStudio() {
                 Add a stream, pick a source (a file, a URL, or the live timeline) and tick the destinations it should reach.
                 Add more streams to broadcast to different channels at the same time.
               </p>
-              <Button size="sm" onClick={() => setStreams((prev) => [...prev, newStream()])} className="mt-2 h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-white hover:bg-km-accent2">
+              <Button size="sm" onClick={() => setStreams((prev) => [...prev, newStream()])} className="mt-2 h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-km-bg hover:bg-km-accent2">
                 <Plus className="h-3.5 w-3.5" />
                 Add stream
               </Button>
@@ -379,7 +379,7 @@ function DestinationsRail({
           <p className="text-[13px] font-semibold tracking-tight text-km-text">Destinations</p>
           <p className="text-[10.5px] text-km-faint">The servers you push to</p>
         </div>
-        <Button size="sm" onClick={onAdd} className="h-7 gap-1 bg-km-accent px-2.5 text-[11px] text-white hover:bg-km-accent2">
+        <Button size="sm" onClick={onAdd} className="h-7 gap-1 bg-km-accent px-2.5 text-[11px] text-km-bg hover:bg-km-accent2">
           <Plus className="h-3.5 w-3.5" />
           New
         </Button>
@@ -610,7 +610,7 @@ function StreamCard({
               Stop
             </Button>
           ) : (
-            <Button size="sm" onClick={onStart} disabled={!canStart} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-white hover:bg-km-accent2">
+            <Button size="sm" onClick={onStart} disabled={!canStart} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-km-bg hover:bg-km-accent2">
               <Play className="h-3.5 w-3.5" />
               {isTimeline ? "Go live" : "Start"}
             </Button>
@@ -753,7 +753,7 @@ function DestinationDialog({ config, onClose, onChanged }: { config: StreamConfi
           </div>
 
           <div className="flex items-center gap-2 pt-1">
-            <Button size="sm" onClick={() => void persist()} disabled={busy || !valid} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-white hover:bg-km-accent2">
+            <Button size="sm" onClick={() => void persist()} disabled={busy || !valid} className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] text-km-bg hover:bg-km-accent2">
               {saved ? <Check className="h-3.5 w-3.5" /> : null}
               {saved ? "Saved" : config ? "Update" : "Save"}
             </Button>

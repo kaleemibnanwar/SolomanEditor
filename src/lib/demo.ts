@@ -207,12 +207,12 @@ export async function buildDemoProject(onProgress?: DemoProgress): Promise<void>
   layers.push(
     createLayer({
       type: "text",
-      name: "OCTO CUT",
+      name: "SOLOMAN EDITOR",
       startTime: 0.4,
       duration: 3.6,
       text: {
         ...DEFAULT_TEXT(DEMO_SETTINGS),
-        content: "OCTO CUT",
+        content: "SOLOMAN EDITOR",
         fontSize: Math.round(DEMO_SETTINGS.height * 0.11),
         fontWeight: 900,
         letterSpacing: 6,

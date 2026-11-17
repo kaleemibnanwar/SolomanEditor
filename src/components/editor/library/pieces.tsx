@@ -31,7 +31,7 @@ export function SearchField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         spellCheck={false}
-        className="h-7 rounded-md border-km-border bg-km-panel2 pl-7 pr-7 text-[11.5px] text-km-text placeholder:text-km-faint focus-visible:ring-1 focus-visible:ring-km-accent"
+        className="h-[37px] rounded-lg border-[#303135] bg-[#1c1d20] pl-8 pr-7 text-[12px] text-km-text placeholder:text-[#73757a] focus-visible:ring-1 focus-visible:ring-km-accent"
       />
       {value.length > 0 && (
         <button
@@ -80,8 +80,8 @@ export function ChipRow<T extends string>({
             className={cn(
               "rounded-full border px-2 py-[3px] text-[10.5px] leading-none transition",
               active
-                ? "border-km-accent/70 bg-km-accent/15 text-km-text"
-                : "border-km-border bg-km-panel2 text-km-dim hover:border-km-accent/40 hover:text-km-text",
+                ? "border-km-text/70 bg-km-raised text-km-text"
+                : "border-km-border bg-km-panel2 text-km-dim hover:border-km-text/40 hover:text-km-text",
             )}
           >
             {option.label}
@@ -170,8 +170,8 @@ export function LibraryCard({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-lg border bg-km-panel2 transition",
-        active ? "border-km-accent ring-1 ring-km-accent/35" : "border-km-border hover:border-km-accent/55",
+        "group relative overflow-hidden rounded-[9px] border bg-[#1c1d1f] transition",
+        active ? "border-[#e6e6e5]" : "border-[#2d2e31] hover:border-[#77797d]",
         disabled && "opacity-40",
       )}
     >
@@ -201,7 +201,7 @@ export function LibraryCard({
               e.stopPropagation();
               onAction();
             }}
-            className="grid h-5 w-5 place-items-center rounded bg-black/65 text-white/80 backdrop-blur transition hover:bg-km-accent hover:text-white"
+            className="grid h-5 w-5 place-items-center rounded bg-black/65 text-white/80 backdrop-blur transition hover:bg-km-text hover:text-km-bg"
           >
             {actionIcon}
           </button>

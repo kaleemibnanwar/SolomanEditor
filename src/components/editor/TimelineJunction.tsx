@@ -126,7 +126,7 @@ export default function TimelineJunction({
               "pointer-events-auto absolute left-1/2 top-1/2 grid h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-[5px] border backdrop-blur-sm transition",
               bonded
                 ? "border-km-accent/70 bg-km-accent/25 text-white"
-                : "border-white/25 bg-black/60 text-white/80 hover:border-km-accent/70 hover:bg-km-accent hover:text-white",
+                : "border-white/25 bg-black/60 text-km-bg/80 hover:border-km-accent/70 hover:bg-km-accent hover:text-km-bg",
               bonded || highlighted || open
                 ? "opacity-100"
                 : "opacity-0 focus-visible:opacity-100 hover:opacity-100",

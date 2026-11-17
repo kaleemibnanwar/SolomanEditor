@@ -154,10 +154,10 @@ export default function AssetLibrary({ tabs }: { tabs?: LibraryTab[] } = {}) {
   const meta = visibleTabs.find((entry) => entry.id === tab) ?? visibleTabs[0];
 
   return (
-    <aside className="flex w-[272px] shrink-0 border-r border-km-border bg-km-panel">
+    <aside className="flex w-[286px] shrink-0 border-r border-km-border bg-km-panel">
       <nav
         aria-label="Asset categories"
-        className="km-scroll-none flex w-[58px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-km-border bg-km-panel2/50 px-1 py-1.5"
+        className="km-scroll-none flex w-[62px] shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-km-border bg-km-panel px-2 py-[15px]"
       >
         {visibleTabs.map((entry) => (
           <RailButton
@@ -170,10 +170,10 @@ export default function AssetLibrary({ tabs }: { tabs?: LibraryTab[] } = {}) {
       </nav>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="shrink-0 px-2.5 pb-2 pt-2.5">
-          <h2 className="text-[12px] font-semibold leading-tight text-km-text">{meta.title}</h2>
-          <p className="mt-0.5 text-[10px] leading-snug text-km-faint">{meta.hint}</p>
-          <div className="mt-2">
+        <header className="shrink-0 px-[15px] pb-3 pt-5">
+          <h2 className="text-[13px] font-bold leading-tight text-km-text">{meta.title}</h2>
+          <p className="mt-1 text-[11px] leading-snug text-km-dim">{meta.hint}</p>
+          <div className="mt-4">
             <SearchField
               value={query}
               onChange={(next) => editor().setUi({ libraryQuery: next })}
@@ -182,7 +182,7 @@ export default function AssetLibrary({ tabs }: { tabs?: LibraryTab[] } = {}) {
           </div>
         </header>
 
-        <div className="km-scroll min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">
+        <div className="km-scroll min-h-0 flex-1 overflow-y-auto px-[14px] pb-4">
           <TabBody tab={meta.id} query={query} />
         </div>
       </div>
@@ -245,14 +245,14 @@ function RailButton({
       aria-current={active ? "true" : undefined}
       title={`${meta.title} — ${meta.hint}`}
       className={cn(
-        "group flex shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-[7px] transition",
-        active ? "bg-km-accent/15" : "hover:bg-km-panel2",
+        "group flex h-[49px] w-[46px] shrink-0 flex-col items-center justify-center gap-1 rounded-lg px-1 transition",
+        active ? "bg-km-border" : "hover:bg-km-raised",
       )}
     >
       <Icon
         className={cn(
           "h-4 w-4 transition",
-          active ? "text-km-accent" : "text-km-faint group-hover:text-km-text",
+          active ? "text-km-text" : "text-km-dim group-hover:text-km-text",
         )}
       />
       <span className={cn("text-[9.5px] leading-none", active ? "text-km-text" : "text-km-dim")}>

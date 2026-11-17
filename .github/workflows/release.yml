@@ -1,14 +1,14 @@
 # Build, sign (when credentials are present) and publish a release, then mirror
 # the installers to the source repo. The updater (`electron-updater` in
 # `electron/main.cjs`) reads the `latest*.yml` feed from the PUBLIC repo
-# (kaleemibnanwar/octocut), so electron-builder publishes there; the source repo
+# (kaleemibnanwar/solomaneditor), so electron-builder publishes there; the source repo
 # gets a copy of the installers for archive/backup.
 #
 # Triggered by pushing a `v*` tag (or "Run workflow"). The version comes from
 # `package.json`; bump it *and* tag it together, e.g. `pnpm version 0.1.0`.
 #
 # Secrets:
-#   PUBLIC_REPO_TOKEN  (required)  PAT with `contents: write` on kaleemibnanwar/octocut
+#   PUBLIC_REPO_TOKEN  (required)  PAT with `contents: write` on kaleemibnanwar/solomaneditor
 #   MAC_CSC_LINK / MAC_CSC_KEY_PASSWORD   (optional) base64 .p12 + password (macOS signing)
 #   WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD   (optional) base64 .pfx + password (Windows signing)
 #   APPLE_API_KEY_BASE64 / APPLE_API_KEY_ID / APPLE_API_ISSUER / APPLE_TEAM_ID
@@ -88,8 +88,8 @@ jobs:
           # Decode the .p12 (stored base64) to a file, then point CSC_LINK at the
           # path — avoids round-tripping a multi-KB base64 string through GITHUB_ENV.
           if [ -n "$MAC_CSC_LINK_B64" ]; then
-            printf '%s' "$MAC_CSC_LINK_B64" | python3 -c 'import base64,sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read()))' > "$RUNNER_TEMP/octocut.p12"
-            echo "CSC_LINK=$RUNNER_TEMP/octocut.p12" >> "$GITHUB_ENV"
+            printf '%s' "$MAC_CSC_LINK_B64" | python3 -c 'import base64,sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read()))' > "$RUNNER_TEMP/solomaneditor.p12"
+            echo "CSC_LINK=$RUNNER_TEMP/solomaneditor.p12" >> "$GITHUB_ENV"
             echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
           fi
           echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
@@ -118,7 +118,7 @@ jobs:
         shell: bash
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "PUBLIC_REPO_TOKEN is required to publish updater assets to kaleemibnanwar/octocut" >&2
+            echo "PUBLIC_REPO_TOKEN is required to publish updater assets to kaleemibnanwar/solomaneditor" >&2
             exit 1
           fi
           pnpm exec electron-builder --publish always
@@ -135,6 +135,6 @@ jobs:
           # `create` is idempotent-ish: the native OS runners race to create the same
           # release, so ignore the "already exists" failure and just upload.
           gh release create "$TAG" --repo "${{ github.repository }}" \
-            --title "Octo Cut $TAG" --notes "Release $TAG" || true
+            --title "Soloman Editor $TAG" --notes "Release $TAG" || true
           find release -maxdepth 1 -type f ! -name 'builder-*' -print0 | \
             xargs -0 gh release upload "$TAG" --repo "${{ github.repository }}" --clobber

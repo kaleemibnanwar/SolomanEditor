@@ -285,7 +285,7 @@ export function ProjectsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <Button
             onClick={() => void saveCurrent()}
             disabled={working}
-            className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] font-medium text-white hover:bg-km-accent2"
+            className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] font-medium text-km-bg hover:bg-km-accent2"
           >
             {busy === "save" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

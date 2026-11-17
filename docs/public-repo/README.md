@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">Octo Cut</h1>
+  <h1 align="center">Soloman Editor</h1>
   <p align="center">A non-destructive video editor that runs on your desktop.</p>
 </p>
 
@@ -11,12 +11,12 @@ media never leaves your machine.
 
 ## Download
 
-Installers and release notes live on the [**Releases**](https://github.com/kaleemibnanwar/octocut/releases) page.
+Installers and release notes live on the [**Releases**](https://github.com/kaleemibnanwar/solomaneditor/releases) page.
 
 | Platform | What to grab |
 |---|---|
-| Windows | `Octo-Cut-Setup-<version>.exe` (installer) or the `.exe` portable |
-| macOS | `Octo-Cut-<version>-<arch>.zip` — unzip and drag to Applications |
+| Windows | `Soloman-Editor-Setup-<version>.exe` (installer) or the `.exe` portable |
+| macOS | `Soloman-Editor-<version>-<arch>.zip` — unzip and drag to Applications |
 | Linux | `.deb` or `.AppImage` from the release |
 
 The desktop app checks for updates automatically on macOS and Windows and prompts you
@@ -26,4 +26,4 @@ page.
 ## From source
 
 This repository holds the download page and release binaries only. The application
-source lives in the private `octocut-source` repository and is available to maintainers.
+source lives in the private `solomaneditor-source` repository and is available to maintainers.

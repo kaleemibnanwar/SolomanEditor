@@ -185,7 +185,7 @@ function SoundRow({
         type="button"
         onClick={onAdd}
         title="Add to the timeline"
-        className="grid h-5 w-5 shrink-0 place-items-center rounded bg-km-raised/70 text-km-dim transition hover:bg-km-accent hover:text-white"
+        className="grid h-5 w-5 shrink-0 place-items-center rounded bg-km-raised/70 text-km-dim transition hover:bg-km-accent hover:text-km-bg"
       >
         {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
       </button>
@@ -260,7 +260,7 @@ function VoicePanel() {
         <Button
           onClick={() => void render()}
           disabled={!trimmed || busy}
-          className="h-8 w-full gap-1.5 bg-km-accent text-[12px] text-white hover:bg-km-accent2 disabled:opacity-45"
+          className="h-8 w-full gap-1.5 bg-km-accent text-[12px] text-km-bg hover:bg-km-accent2 disabled:opacity-45"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mic className="h-3.5 w-3.5" />}
           {busy ? "Rendering…" : `Add in ${voiceName(voice)}'s voice`}

@@ -68,7 +68,7 @@ export interface BroadcastBridge {
 
 /** The preload bridge, or `null` outside the desktop app. */
 export const broadcastBridge = (): BroadcastBridge | null =>
-  typeof window === "undefined" ? null : window.octoCutHost?.broadcast ?? null;
+  typeof window === "undefined" ? null : window.solomanEditorHost?.broadcast ?? null;
 
 export const broadcastAvailable = (): boolean => broadcastBridge() !== null;
 

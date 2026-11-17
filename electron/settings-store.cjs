@@ -18,7 +18,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
-const FILE_NAME = "octo-cut-settings.json";
+const FILE_NAME = "soloman-editor-settings.json";
 
 /** Keys this store will read/write. Anything else in the file is preserved but ignored. */
 const KNOWN_KEYS = new Set(["pixabayApiKey", "pexelsApiKey", "telemetryEnabled"]);
@@ -34,7 +34,7 @@ async function readAll(userDataDir) {
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch (error) {
     if (error?.code === "ENOENT") return {};
-    console.error(`[octo-cut] settings file unreadable, starting empty — ${error?.message ?? error}`);
+    console.error(`[soloman-editor] settings file unreadable, starting empty — ${error?.message ?? error}`);
     return {};
   }
 }

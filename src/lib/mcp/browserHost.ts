@@ -15,7 +15,7 @@
 import type { HostBridge } from "@/lib/mcp/host";
 
 /** The page's own channel on the dev server. See `vite/mcp-bridge.ts`. */
-const BRIDGE = "/__octo-cut/mcp";
+const BRIDGE = "/__soloman-editor/mcp";
 
 /** How long to wait after a poll fails before trying again. */
 const RETRY_MS = 1500;

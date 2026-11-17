@@ -62,9 +62,9 @@ import { editor, editorStore, timelineDuration, useEditor } from "@/store/editor
 import { shallowArrayEqual } from "@/store/createStore";
 import type { Layer, LayerId, Track } from "@/types/editor";
 
-const ROW_H = 46;
+const ROW_H = 36;
 const RULER_H = 28;
-const RAIL_W = 184;
+const RAIL_W = 142;
 const MIN_PPS = 12;
 const MAX_PPS = 900;
 
@@ -165,7 +165,7 @@ export default function Timeline() {
   const playheadX = currentTime * pps;
 
   return (
-    <section className="flex h-[262px] shrink-0 flex-col border-t border-km-border bg-km-panel">
+    <section className="flex h-[245px] shrink-0 flex-col border-t border-km-border bg-km-panel">
       <TimelineToolbar rowCount={rows.length} />
 
       <div className="flex min-h-0 flex-1">
@@ -335,7 +335,7 @@ function TimelineToolbar({ rowCount }: { rowCount: number }) {
   };
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1.5 border-b border-km-border px-2">
+    <div className="flex h-[43px] shrink-0 items-center gap-1.5 border-b border-km-border px-[15px]">
       <ToolButton
         title="Split at playhead (S)"
         onClick={() => {

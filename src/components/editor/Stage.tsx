@@ -486,7 +486,7 @@ export default function Stage() {
   return (
     <div
       ref={wrapRef}
-      className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-km-bg p-4"
+      className="studio-stage-dots relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4"
       /* The frame is a drop surface too: a media drop anywhere over it becomes a
          new layer at the playhead, centred on the canvas. */
       data-drop="stage"
@@ -498,7 +498,7 @@ export default function Stage() {
       onDrop={onDrop}
     >
       <div
-        className="relative shadow-2xl ring-1 ring-km-border"
+        className="relative border border-[#44464b] shadow-[0_18px_70px_rgba(0,0,0,0.55)]"
         style={{ width: displayW, height: displayH, cursor }}
       >
         <canvas ref={canvasRef} className="block h-full w-full bg-black" />
@@ -633,7 +633,7 @@ function SelectionOutline({
       }}
     >
       <div className={`h-full w-full border ${primary ? "border-km-accent" : "border-km-accent/60"}`} />
-      <span className="absolute -top-6 left-0 max-w-full truncate rounded bg-km-accent px-1.5 py-0.5 text-[10px] font-medium text-white">
+      <span className="absolute -top-6 left-0 max-w-full truncate rounded bg-km-accent px-1.5 py-0.5 text-[10px] font-medium text-km-bg">
         {label}
       </span>
     </div>
@@ -674,7 +674,7 @@ function Handle({
       onPointerDown={onPointerDown}
       className={
         isRotate
-          ? "absolute flex items-center justify-center rounded-full border-2 border-white bg-km-accent text-[9px] text-white"
+          ? "absolute flex items-center justify-center rounded-full border-2 border-white bg-km-accent text-[9px] text-km-bg"
           : "absolute rounded-sm border-2 border-white bg-km-accent"
       }
       style={{

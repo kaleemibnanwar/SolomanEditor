@@ -3,7 +3,7 @@
  * and stream configs.
  *
  * Runs in the main process (the renderer is sandboxed with no Node), so the
- * renderer reaches it over the `octo-cut:store:*` IPC channels. The schema is one
+ * renderer reaches it over the `soloman-editor:store:*` IPC channels. The schema is one
  * key-value table — `kv(domain, key, value, blob)` — where `value` is the record
  * as JSON text and `blob` holds the binary media payload (the one field that
  * cannot live in JSON). A WAL journal and a WITHOUT-ROWID primary key keep it
@@ -26,7 +26,7 @@ try {
 }
 
 /**
- * Open (or create) the store at `<userData>/octo-cut.db`.
+ * Open (or create) the store at `<userData>/soloman-editor.db`.
  *
  * Every method is async so the IPC handlers can await it uniformly, even though
  * `node:sqlite` itself is synchronous under the hood.
@@ -45,7 +45,7 @@ function createStore(userDataDir) {
     return unavailable;
   }
 
-  const file = path.join(userDataDir, "octo-cut.db");
+  const file = path.join(userDataDir, "soloman-editor.db");
   const db = new DatabaseSync(file);
 
   db.exec("PRAGMA journal_mode = WAL;");

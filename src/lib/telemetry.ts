@@ -27,7 +27,7 @@ function ensureLoaded() {
     Clarity.init(CLARITY_PROJECT_ID);
     loaded = true;
   } catch (error) {
-    console.warn("[octo-cut] Clarity could not start", error);
+    console.warn("[soloman-editor] Clarity could not start", error);
   }
 }
 

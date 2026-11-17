@@ -34,7 +34,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const LOG = "[octo-cut] ";
+const LOG = "[soloman-editor] ";
 
 /** Tells Chromium to stop considering the setuid helper at all. */
 const SKIP_HELPER_FLAG = "--disable-setuid-sandbox";

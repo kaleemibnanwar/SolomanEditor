@@ -35,7 +35,7 @@ export interface ImageExportResult {
 }
 
 const safeName = (name: string) =>
-  (name.trim() || "octo-cut-image")
+  (name.trim() || "soloman-editor-image")
     .replace(/[^\w\-. ]+/g, "")
     .replace(/\s+/g, "-")
     // A caller may hand over a full filename ("poster.png"); the extension is

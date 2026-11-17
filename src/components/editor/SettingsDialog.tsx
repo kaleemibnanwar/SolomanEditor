@@ -253,7 +253,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               <div className="min-w-0">
                 <div className="text-[12px] font-medium text-km-text">Share anonymous usage data</div>
                 <div className="mt-0.5 text-[10.5px] leading-snug text-km-faint">
-                  Tracks which features are used so Octo Cut can be improved. No media, projects or
+                  Tracks which features are used so Soloman Editor can be improved. No media, projects or
                   personal content are ever sent.
                 </div>
               </div>
@@ -293,7 +293,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <Button
             onClick={() => void save()}
             disabled={saving || blocked}
-            className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] font-medium text-white hover:bg-km-accent2"
+            className="h-8 gap-1.5 bg-km-accent px-3 text-[12px] font-medium text-km-bg hover:bg-km-accent2"
           >
             <KeyRound className="h-3.5 w-3.5" />
             Save

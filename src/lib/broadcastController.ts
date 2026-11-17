@@ -186,7 +186,7 @@ async function launchTimelinePush(
         hiddenTrackIds: options.hiddenTrackIds,
         videoBitrate: options.videoBitrate,
         onChunk: (chunk) => bridge.chunk(chunk),
-        onError: (message) => console.error("[octo-cut] timeline broadcast:", message),
+        onError: (message) => console.error("[soloman-editor] timeline broadcast:", message),
         onStopped: () => {
           engine = null;
           // Stop only this timeline's sinks — other streams (files, URLs) keep pushing.
@@ -267,7 +267,7 @@ export async function stopTimelinePush(): Promise<void> {
   try {
     active?.stop();
   } catch (error) {
-    console.error("[octo-cut] timeline stop failed:", error);
+    console.error("[soloman-editor] timeline stop failed:", error);
   }
   // Stop ffmpeg directly too — the engine's onStopped does this, but a failure in
   // the capture cleanup must never leave the push running. Only this timeline's

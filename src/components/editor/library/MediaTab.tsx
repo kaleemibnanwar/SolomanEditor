@@ -40,7 +40,7 @@ export default function MediaTab({ query, kinds }: { query: string; kinds?: Asse
       <button
         type="button"
         onClick={() => void importFromInput()}
-        className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-km-border py-2.5 text-[11.5px] text-km-dim transition hover:border-km-accent/70 hover:bg-km-accent/5 hover:text-km-text"
+        className="flex h-[37px] w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#505156] text-[11px] text-km-text transition hover:bg-km-raised"
       >
         <ImagePlus className="h-3.5 w-3.5" />
         {importLabel}

@@ -314,7 +314,7 @@ export function SegmentedField<T extends string>({
             onClick={() => onChange(o.value)}
             className={cn(
               "flex h-7 flex-1 items-center justify-center text-[11px] transition",
-              value === o.value ? "bg-km-accent text-white" : "bg-km-track text-km-dim hover:bg-km-raised hover:text-km-text",
+              value === o.value ? "bg-km-accent text-km-bg" : "bg-km-track text-km-dim hover:bg-km-raised hover:text-km-text",
             )}
           >
             {o.label}

@@ -152,7 +152,7 @@ function SingleLayer({ layer }: { layer: Layer }) {
             className={cn(
               "truncate rounded px-1 py-1 text-[10.5px] transition",
               active === t.value
-                ? "bg-km-accent text-white"
+                ? "bg-km-border text-km-text"
                 : "bg-km-panel2 text-km-dim hover:bg-km-raised hover:text-km-text",
             )}
           >
@@ -1649,8 +1649,8 @@ function MultiPanel({ layers }: { layers: Layer[] }) {
 
 function PanelTitle({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="flex h-11 shrink-0 items-center gap-2 border-b border-km-border px-3">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-km-dim">{title}</span>
+    <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-km-border px-[17px]">
+      <span className="text-[12px] font-bold text-km-text">{title}</span>
       {hint && <span className="ml-auto text-[10px] text-km-faint">{hint}</span>}
     </div>
   );
