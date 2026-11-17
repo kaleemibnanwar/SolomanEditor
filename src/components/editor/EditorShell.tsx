@@ -268,7 +268,7 @@ function BootOverlay({ message, progress }: { message: string; progress: number 
 
       <p className="flex items-center gap-1.5 text-[10.5px] text-km-faint">
         <Loader2 className="h-3 w-3 animate-spin" />
-        Generating demo media in the browser — no downloads needed
+        Preparing your welcome project — everything runs locally
       </p>
     </div>
   );

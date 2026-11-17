@@ -656,6 +656,74 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   }),
 ];
 
+/**
+ * IMAGE BACKGROUNDS.
+ * 
+ * Real background images from copyright-free sources (Unsplash).
+ * These are bundled in public/backgrounds/ and can be clicked to add as
+ * background layers.
+ */
+export interface ImageBackground {
+  id: string;
+  label: string;
+  hint: string;
+  category: string;
+  filename: string;
+}
+
+export const IMAGE_BACKGROUNDS: ImageBackground[] = [
+  // Nature
+  { id: "imgbg-forest", label: "Forest", hint: "Lush green forest", category: "Nature", filename: "nature-forest.jpg" },
+  { id: "imgbg-mountain", label: "Mountain", hint: "Majestic peaks", category: "Nature", filename: "nature-mountain.jpg" },
+  { id: "imgbg-ocean", label: "Ocean", hint: "Deep blue sea", category: "Nature", filename: "nature-ocean.jpg" },
+  { id: "imgbg-sunset", label: "Sunset", hint: "Golden hour sky", category: "Nature", filename: "nature-sunset.jpg" },
+  { id: "imgbg-desert", label: "Desert", hint: "Sandy dunes", category: "Nature", filename: "nature-desert.jpg" },
+  { id: "imgbg-beach", label: "Tropical beach", hint: "Paradise shore", category: "Nature", filename: "tropical-beach.jpg" },
+  { id: "imgbg-aurora", label: "Aurora", hint: "Northern lights", category: "Nature", filename: "aurora-northern.jpg" },
+  { id: "imgbg-flowers", label: "Flower field", hint: "Colorful blooms", category: "Nature", filename: "flower-field.jpg" },
+  { id: "imgbg-autumn", label: "Autumn", hint: "Fall foliage", category: "Nature", filename: "autumn-leaves.jpg" },
+  { id: "imgbg-winter", label: "Winter", hint: "Snow landscape", category: "Nature", filename: "winter-snow.jpg" },
+  { id: "imgbg-lavender", label: "Lavender", hint: "Purple fields", category: "Nature", filename: "lavender-field.jpg" },
+  { id: "imgbg-golden", label: "Golden hour", hint: "Warm meadow", category: "Nature", filename: "golden-hour.jpg" },
+  
+  // Abstract
+  { id: "imgbg-abstract1", label: "Colorful abstract", hint: "Vibrant gradients", category: "Abstract", filename: "abstract-colorful.jpg" },
+  { id: "imgbg-abstract2", label: "Dark abstract", hint: "Moody tones", category: "Abstract", filename: "abstract-dark.jpg" },
+  { id: "imgbg-abstract3", label: "Gradient flow", hint: "Smooth transitions", category: "Abstract", filename: "abstract-gradient1.jpg" },
+  { id: "imgbg-abstract4", label: "Gradient wash", hint: "Soft colors", category: "Abstract", filename: "abstract-gradient2.jpg" },
+  { id: "imgbg-abstract5", label: "Neon abstract", hint: "Bright neon", category: "Abstract", filename: "abstract-neon.jpg" },
+  
+  // City
+  { id: "imgbg-skyline", label: "City skyline", hint: "Urban panorama", category: "City", filename: "city-skyline.jpg" },
+  { id: "imgbg-night", label: "Night city", hint: "City lights", category: "City", filename: "city-night.jpg" },
+  { id: "imgbg-street", label: "Street", hint: "Urban street", category: "City", filename: "city-street.jpg" },
+  
+  // Sky
+  { id: "imgbg-clouds", label: "Clouds", hint: "Fluffy sky", category: "Sky", filename: "sky-clouds.jpg" },
+  { id: "imgbg-stars", label: "Stars", hint: "Starry night", category: "Sky", filename: "sky-stars.jpg" },
+  
+  // Space
+  { id: "imgbg-galaxy", label: "Galaxy", hint: "Deep space", category: "Space", filename: "space-galaxy.jpg" },
+  { id: "imgbg-nebula", label: "Nebula", hint: "Cosmic clouds", category: "Space", filename: "space-nebula.jpg" },
+  
+  // Texture
+  { id: "imgbg-wood", label: "Wood", hint: "Natural wood", category: "Texture", filename: "texture-wood.jpg" },
+  
+  // Effects
+  { id: "imgbg-bokeh", label: "Bokeh lights", hint: "Soft light orbs", category: "Effects", filename: "bokeh-lights.jpg" },
+  { id: "imgbg-smoke", label: "Smoke", hint: "Dark smoke", category: "Effects", filename: "smoke-dark.jpg" },
+  { id: "imgbg-fire", label: "Fire", hint: "Flames", category: "Effects", filename: "fire-flames.jpg" },
+  { id: "imgbg-rain", label: "Rain", hint: "Rainy window", category: "Effects", filename: "rain-window.jpg" },
+  
+  // Water
+  { id: "imgbg-coral", label: "Underwater", hint: "Coral reef", category: "Water", filename: "underwater-coral.jpg" },
+  
+  // Artistic
+  { id: "imgbg-watercolor1", label: "Watercolor blue", hint: "Soft blue wash", category: "Artistic", filename: "watercolor-blue.jpg" },
+  { id: "imgbg-watercolor2", label: "Watercolor pink", hint: "Soft pink wash", category: "Artistic", filename: "watercolor-pink.jpg" },
+  { id: "imgbg-paper", label: "Paper", hint: "Textured paper", category: "Artistic", filename: "paper-texture.jpg" },
+];
+
 /* ------------------------------------------------------------------ *
  * Shapes, stickers, text
  * ------------------------------------------------------------------ */

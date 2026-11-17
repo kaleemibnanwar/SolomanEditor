@@ -54,6 +54,7 @@ extraMetadata:
   main: electron/main.cjs
 
 mac:
+  artifactName: Soloman-Editor-${version}-${arch}.zip
   target:
     - zip
     - dmg
@@ -66,6 +67,7 @@ win:
     - portable
 
 linux:
+  artifactName: Soloman-Editor-${version}-${arch}.${ext}
   target:
     - AppImage
     - deb
@@ -78,7 +80,14 @@ linux:
   # installed .desktop file to match, rather than falling back to productName.
   syncDesktopName: true
 
+dmg:
+  artifactName: Soloman-Editor-${version}-${arch}.dmg
+
+portable:
+  artifactName: Soloman-Editor-Portable-${version}.exe
+
 nsis:
+  artifactName: Soloman-Editor-Setup-${version}.exe
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true

@@ -1,11 +1,11 @@
 /**
- * USER SNAPSHOT TEMPLATES — the agent's own reusable starting points.
+ * USER SNAPSHOT TEMPLATES — reusable starting points, saved from real work.
  *
- * The built-in templates (`lib/templates.ts`) are *recipes* — beats, rows and
- * cards that `buildTemplateProject` lays out fresh each time. These are
- * different: a SNAPSHOT of a project the agent (or person) already arranged,
- * saved verbatim so a later `create_project { snapshot }` opens the same rows,
- * overlays, brand and canvas without rebuilding from scratch.
+ * The editor ships with NO built-in templates. A template here is always a
+ * SNAPSHOT of a project the agent (or person) already arranged, saved verbatim
+ * so a later `create_from_template` opens the same rows, overlays, brand and
+ * canvas without rebuilding from scratch. The MCP template tools
+ * (`lib/mcp/templateTools.ts`) are the only surface that reads or writes these.
  *
  * Only the structure survives the round trip. Media layers (video / image /
  * audio) point at `blob:` URLs and decoded buffers that live for one session,
@@ -32,7 +32,7 @@ export interface UserTemplate {
   blurb?: string;
   createdAt: number;
   project: Project;
-  /** The fields a later create_project { snapshot, slots } may override. */
+  /** The fields a later create_from_template { slots } may override. */
   slots?: TemplateSlot[];
 }
 

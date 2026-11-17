@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f8f8f7">
+  <title>Soloman Editor — Your studio. Agent-native.</title>
+  <meta name="description" content="Soloman Editor is a local-first video, image and broadcast studio with a real MCP server inside. Edit on a professional layer timeline — or let your AI agent do the cutting.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/webp" href="%%LOGO%%">
+  <style>
+    :root{--bg:#f8f8f7;--paper:#fff;--ink:#171717;--muted:#747474;--line:#e4e4e1;--soft:#f0f0ee;--head:rgba(248,248,247,.94);--btn-ink-bg:#191919;--btn-ink-fg:#fff;--shot-bg:#eaeae8;--shot-line:#d7d7d4;--radius:10px;color-scheme:light}
+    :root[data-theme="dark"]{color-scheme:dark;--bg:#0b0d11;--paper:#12161d;--ink:#f4f7fb;--muted:#9aa5b5;--line:#27303d;--soft:#1a202b;--head:rgba(11,13,17,.94);--btn-ink-bg:#f4f7fb;--btn-ink-fg:#12161d;--shot-bg:#10141b;--shot-line:#27303d}
+    @media (prefers-color-scheme: dark){
+      :root:not([data-theme="light"]){color-scheme:dark;--bg:#0b0d11;--paper:#12161d;--ink:#f4f7fb;--muted:#9aa5b5;--line:#27303d;--soft:#1a202b;--head:rgba(11,13,17,.94);--btn-ink-bg:#f4f7fb;--btn-ink-fg:#12161d;--shot-bg:#10141b;--shot-line:#27303d}
+    }
+    *{box-sizing:border-box}html{scroll-behavior:smooth}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+    a{text-decoration:none;color:inherit}button{font:inherit;cursor:pointer}img{max-width:100%;display:block}
+    .wrap{width:min(1180px,calc(100% - 56px));margin:auto}
+    .mono,.eyebrow,.micro-note,.hero-meta,.stat small{font-family:"IBM Plex Mono",monospace}
+    .eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+    .muted{color:var(--muted)}
+    .skip-link{position:absolute;left:-999px}.skip-link:focus{left:16px;top:16px;z-index:50;background:var(--btn-ink-bg);color:var(--btn-ink-fg);padding:10px;border-radius:6px}
+    .top{position:sticky;top:0;z-index:30;background:var(--head);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+    .nav{height:70px;display:flex;align-items:center;justify-content:space-between;gap:22px}
+    .brand{display:flex;align-items:center;gap:11px;font-weight:700;font-size:19px;letter-spacing:-.06em}
+    .brand-dot{color:var(--muted)}
+    .mark{width:31px;height:31px;border-radius:8px;object-fit:contain}
+    .mini-mark{width:22px;height:22px;border-radius:6px;object-fit:contain}
+    .links{display:flex;align-items:center;gap:30px;font-size:12px;color:var(--muted)}
+    .links a:hover,.footer a:hover{color:var(--ink)}
+    .actions{display:flex;gap:10px;align-items:center}
+    .btn{border:1px solid var(--line);background:transparent;color:var(--ink);padding:11px 16px;border-radius:7px;font-weight:600;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:10px;transition:transform .2s,border-color .2s,background .2s}
+    .btn:hover{transform:translateY(-1px);border-color:var(--muted)}
+    .btn.black{background:var(--btn-ink-bg);border-color:var(--btn-ink-bg);color:var(--btn-ink-fg)}
+    .btn.white{background:var(--paper)}
+    .menu{display:none}.mobile-nav{display:none}
+    .hero{padding:104px 0 64px;text-align:center}
+    .hero h1{font-size:clamp(52px,7.3vw,106px);line-height:.99;letter-spacing:-.084em;font-weight:600;margin:23px auto 24px;max-width:1050px}
+    .hero h1 span{color:#a2a2a0}
+    :root[data-theme="dark"] .hero h1 span{color:#5b6675}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .hero h1 span{color:#5b6675}}
+    .hero p{font-size:17px;line-height:1.7;color:var(--muted);max-width:600px;margin:0 auto 28px}
+    .cta{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+    .announcement{display:inline-flex;gap:10px;align-items:center;border:1px solid var(--line);background:var(--paper);border-radius:99px;padding:8px 13px;font-size:11px;color:var(--muted)}
+    .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block}
+    .hero-meta{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-top:29px;font-size:10px;color:var(--muted);letter-spacing:.04em}
+    .showcase{border:1px solid var(--shot-line);background:var(--shot-bg);border-radius:15px;padding:10px;box-shadow:0 32px 70px rgba(0,0,0,.10)}
+    .shot{background:var(--paper);border:1px solid var(--line);border-radius:9px;overflow:hidden;text-align:left}
+    .shotbar{height:44px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 18px;color:var(--muted);font-size:11px;gap:12px}
+    .shotbar .left{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--ink);min-width:0;white-space:nowrap}
+    .shotbar .right{font-family:"IBM Plex Mono",monospace;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .shot img{width:100%;height:auto}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:var(--paper)}
+    .stat{padding:18px 23px;border-right:1px solid var(--line)}
+    .stat:last-child{border:0}
+    .stat b{display:block;font-size:15px}
+    .stat small{color:var(--muted);font-size:9px}
+    .section{padding:116px 0}
+    .sectionhead{display:flex;justify-content:space-between;gap:30px;align-items:end;margin-bottom:35px}
+    .section h2{font-size:clamp(34px,4.4vw,60px);line-height:1.07;letter-spacing:-.065em;font-weight:600;margin:15px 0}
+    .sectionhead p{max-width:380px;line-height:1.8;color:var(--muted)}
+    .products{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+    .product{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:23px;min-height:270px;display:flex;flex-direction:column;transition:.2s}
+    .product:hover{border-color:var(--muted);transform:translateY(-3px)}
+    .product .symbol{font-size:25px;display:grid;place-items:center;background:var(--soft);width:46px;height:46px;border-radius:8px;margin-bottom:40px}
+    .product h3{font-size:19px;letter-spacing:-.04em;margin:0 0 9px}
+    .product p{font-size:12px;line-height:1.7;color:var(--muted);margin:0 0 20px}
+    .product a{margin-top:auto;font-size:11px;font-weight:700}
+    .band{background:var(--soft);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+    .split{display:grid;grid-template-columns:1fr 1fr;gap:75px;align-items:center}
+    .split>*{min-width:0}
+    .lead{line-height:1.8;max-width:480px}
+    .featurelist{display:grid;gap:21px;margin-top:30px}
+    .feature{display:flex;gap:15px;align-items:start}
+    .num{font:11px "IBM Plex Mono",monospace;color:var(--muted);margin-top:3px}
+    .feature b{display:block;margin-bottom:5px}
+    .feature p{font-size:12px;color:var(--muted);line-height:1.7;margin:0}
+    .feature-cta{margin-top:30px}
+    .featurevisual{background:var(--shot-bg);border:1px solid var(--shot-line);border-radius:12px;padding:28px 18px;display:flex;align-items:center;justify-content:center}
+    .panelshot{width:262px;border:1px solid var(--line);border-radius:11px;overflow:hidden;box-shadow:15px 23px 30px rgba(0,0,0,.18);transform:rotate(-2deg);background:var(--paper)}
+    .panelshot img{width:100%;height:auto}
+    .codeblock{margin-top:26px;background:#14161c;color:#c9d4e3;border:1px solid #262b36;border-radius:9px;padding:16px 18px;font:11.5px/1.8 "IBM Plex Mono",monospace;overflow-x:auto;white-space:pre}
+    .codeblock .c{color:#6b7688}.codeblock .k{color:#8ab4ff}.codeblock .s{color:#9ece8a}
+    .diagram{background:#191919;color:#f3f3f3;border-radius:12px;padding:38px;margin-top:35px;display:grid;grid-template-columns:1fr 50px 1fr 50px 1fr;align-items:center;gap:10px}
+    :root[data-theme="dark"] .diagram{background:var(--paper);border:1px solid var(--line)}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .diagram{background:var(--paper);border:1px solid var(--line)}}
+    .node{border:1px solid #444;border-radius:8px;padding:22px;min-height:145px}
+    :root[data-theme="dark"] .node{border-color:var(--line)}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .node{border-color:var(--line)}}
+    .node .eyebrow{color:#888}
+    .node h3{margin:22px 0 7px;font-size:17px}
+    .node p{font-size:11px;color:#aaa;line-height:1.6;margin:0}
+    .node .mono{font-size:10.5px;color:#9ece8a}
+    .arrow{text-align:center;color:#888;font-size:23px}
+    .architecture-note{margin:18px 0 0;color:var(--muted);font-size:11px}
+    .surfaces{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .surface{background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;transition:.2s}
+    .surface:hover{border-color:var(--muted);transform:translateY(-3px)}
+    .surface .thumb{border-bottom:1px solid var(--line);background:#0b0d11}
+    .surface .thumb img{width:100%;height:auto;aspect-ratio:16/10;object-fit:cover;object-position:top}
+    .surface .body{padding:20px 22px 24px;display:flex;flex-direction:column;flex:1}
+    .surface h3{font-size:18px;letter-spacing:-.04em;margin:10px 0 8px}
+    .surface p{font-size:12px;line-height:1.7;color:var(--muted);margin:0}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+    .chips span{font-size:10.5px;border:1px solid var(--line);background:var(--paper);padding:8px 11px;border-radius:5px;color:var(--muted)}
+    .banner{background:#1b1b1b;color:#fff;border-radius:13px;padding:65px;display:flex;justify-content:space-between;align-items:center;gap:25px}
+    .banner h2{margin:13px 0 0;font-size:clamp(35px,4vw,55px);letter-spacing:-.065em;line-height:1.1}
+    .banner .btn{background:#fff;color:#171717;border-color:#fff;white-space:nowrap}
+    .inverse{color:#999}
+    .footer{border-top:1px solid var(--line);margin-top:100px;padding:38px 0 50px;display:flex;justify-content:space-between;gap:20px;color:var(--muted);font-size:11px}
+    .footerlinks{display:flex;gap:25px;flex-wrap:wrap}
+    @media(max-width:900px){
+      .links{display:none}.menu{display:inline-flex}
+      .mobile-nav.open{display:flex;position:absolute;left:0;right:0;top:70px;background:var(--bg);border-bottom:1px solid var(--line);padding:20px 28px;flex-direction:column;gap:20px}
+      .products{grid-template-columns:repeat(2,1fr)}
+      .split{gap:30px}
+      .diagram{grid-template-columns:1fr;gap:10px}.arrow{transform:rotate(90deg)}
+      .surfaces{grid-template-columns:1fr}
+      .panelshot{transform:none}
+    }
+    @media(max-width:600px){
+      .wrap{width:calc(100% - 36px)}
+      .nav{height:64px}.nav .actions>.btn.white{display:none}
+      .hero{padding:75px 0 45px}.hero h1{font-size:54px}.hero p{font-size:14px}
+      .hero-meta{gap:12px;font-size:9px}
+      .showcase{padding:5px}.shotbar{height:40px;padding:0 12px}.shotbar .right{display:none}
+      .stats{grid-template-columns:repeat(2,1fr)}.stat{padding:12px}
+      .section{padding:75px 0}
+      .sectionhead{display:block}.sectionhead p{max-width:100%}
+      .products,.split{grid-template-columns:1fr}
+      .product{min-height:230px}.product .symbol{margin-bottom:25px}
+      .banner{padding:35px;display:block}.banner .btn{margin-top:25px}
+      .footer{display:block}.footerlinks{margin-top:22px}
+      .mobile-nav.open{top:64px}
+    }
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="top">
+    <div class="wrap nav">
+      <a href="#main-content" class="brand" aria-label="Soloman Editor home"><img class="mark" src="%%LOGO%%" alt=""> soloman editor<span class="brand-dot">.</span></a>
+      <nav class="links" aria-label="Primary navigation">
+        <a href="#features">Features</a><a href="#agent">AI agent</a><a href="#surfaces">Surfaces</a><a href="#local">Local-first</a>
+        <a href="https://github.com/kaleemibnanwar/Octopus-AI-Ecosystem" target="_blank" rel="noreferrer">GitHub ↗</a>
+      </nav>
+      <div class="actions">
+        <a class="btn black" href="/">Open the editor ↗</a>
+        <button class="btn white theme-toggle" type="button" data-theme-toggle aria-label="Switch theme"><span data-theme-label>◐</span></button>
+        <button class="btn menu" type="button" aria-label="Toggle navigation" aria-expanded="false" data-menu>☰</button>
+      </div>
+    </div>
+    <nav class="mobile-nav" data-mobile-nav aria-label="Mobile navigation"><a href="#features">Features</a><a href="#agent">AI agent</a><a href="#surfaces">Surfaces</a><a href="#local">Local-first</a></nav>
+  </header>
+
+  <main id="main-content">
+    <section class="hero wrap">
+      <div class="announcement"><span class="dot"></span> SOLOMAN EDITOR · PART OF THE SOLOMAN ECOSYSTEM <span class="muted">↗</span></div>
+      <h1>Your studio.<br><span>Agent-native.</span></h1>
+      <p>A local-first video, image and broadcast studio with a real MCP server inside. Cut on a professional layer timeline yourself — or point your AI agent at it and watch the edit happen.</p>
+      <div class="cta"><a href="/" class="btn black">Open Soloman Editor ↗</a><a href="#features" class="btn white">Explore the features ↓</a></div>
+      <div class="hero-meta"><span>VIDEO · IMAGE · BROADCAST</span><span>84 MCP TOOLS · 9 RESOURCES · 5 PROMPTS</span><span>NOTHING LEAVES YOUR MACHINE</span></div>
+    </section>
+
+    <section class="wrap showcase" aria-label="Soloman Editor preview">
+      <div class="shot">
+        <div class="shotbar"><span class="left"><img class="mini-mark" src="%%LOGO%%" alt=""> Soloman Editor — welcome project</span><span class="right">● LOCAL SESSION &nbsp;·&nbsp; 1920×1080 &nbsp;·&nbsp; 30 FPS</span></div>
+        <img src="%%SHOT_EDIT%%" alt="The Soloman Editor timeline: seven tracks of photo scenes, transition bonds, titles, effects and a music bed" width="1600" height="1000">
+        <div class="stats">
+          <div class="stat"><b>84</b><small>MCP TOOLS BUILT IN</small></div>
+          <div class="stat"><b>20</b><small>EFFECT KINDS</small></div>
+          <div class="stat"><b>34</b><small>BUNDLED PHOTOS</small></div>
+          <div class="stat"><b>3</b><small>SURFACES · ONE ENGINE</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section wrap" id="features">
+      <div class="sectionhead">
+        <div><div class="eyebrow">01 / THE EDITOR</div><h2>One timeline.<br>Every layer.</h2></div>
+        <p>A non-destructive, layer-based editor. Clips hold an in-point and a duration into the source, so trimming never destroys anything — and every change is one undo step.</p>
+      </div>
+      <div class="products">
+        <article class="product"><div class="symbol">▦</div><div class="eyebrow">01 / COMPOSE</div><h3>Layers &amp; bonds</h3><p>Tracks for picture, titles, overlays and sound. Clips that touch form a junction — attach a bond and the cut becomes a cross-zoom, soft wipe, ripple or light leak.</p><a href="#surfaces">See the surfaces ↗</a></article>
+        <article class="product"><div class="symbol">✦</div><div class="eyebrow">02 / STYLE</div><h3>Effects &amp; grade</h3><p>Twenty effect kinds, film grain, vignette and wash layers, filter looks and a full colour grade — exposure, contrast, saturation, temperature and more.</p><a href="#agent">Let the agent grade it ↗</a></article>
+        <article class="product"><div class="symbol">✎</div><div class="eyebrow">03 / ANIMATE</div><h3>Titles &amp; motion</h3><p>Text with gradients, boxes and skew; eighteen shapes and a sticker set. Keyframe position, scale, rotation and opacity — the canvas drags, the inspector dials in exact values.</p><a href="#agent">Describe a motion pass ↗</a></article>
+        <article class="product"><div class="symbol">♪</div><div class="eyebrow">04 / DELIVER</div><h3>Sound &amp; export</h3><p>Music, recording and generated voiceover, plus subtitles. Exports run in a background queue with a live monitor — keep editing while the render works.</p><a href="#surfaces">Still images too ↗</a></article>
+      </div>
+      <div class="chips"><span>Scrubbable number fields</span><span>Keyframes on every property</span><span>Marquee &amp; shift-select on canvas</span><span>Snapping timeline</span><span>Autosave to your browser</span><span>Project library</span><span>Copyright-free stock built in</span></div>
+    </section>
+
+    <section class="section band" id="agent">
+      <div class="wrap split">
+        <div>
+          <div class="eyebrow">02 / THE AI AGENT</div>
+          <h2>The editor is<br>an MCP server.</h2>
+          <p class="muted lead">Not a chat widget bolted on the side — the editing session itself is published over the Model Context Protocol. Any MCP host can read the timeline, move clips, grade footage and render exports, live, while you watch.</p>
+          <div class="featurelist">
+            <div class="feature"><span class="num">01</span><div><b>Point any agent at it</b><p>Streamable HTTP on loopback — no auth, no relay, no account. Also reachable from the console and over postMessage for extensions and harnesses.</p></div></div>
+            <div class="feature"><span class="num">02</span><div><b>A whole editorial pass per call</b><p>84 tools across observe, control, import, projects, content, flows, macros and manifests. Compose an entire piece from JSON, or save a recipe and replay it.</p></div></div>
+            <div class="feature"><span class="num">03</span><div><b>Templates with slots</b><p>Snapshot any project as a template with named slots, then regenerate it with new text and media in a single call. Every call lands as one undo step.</p></div></div>
+          </div>
+          <div class="codeblock"><span class="c">// From any console — the same JSON-RPC path a host uses:</span>
+<span class="k">await</span> window.solomanEditorMcp.client.callTool(<span class="s">"get_timeline"</span>)
+
+<span class="c">// Or point any MCP client at the live endpoint:</span>
+<span class="c">//   http://localhost:&lt;port&gt;/mcp</span></div>
+          <a class="btn black feature-cta" href="#local">How the connection works ↗</a>
+        </div>
+        <div class="featurevisual">
+          <div class="panelshot"><img src="%%SHOT_AGENT%%" alt="The Agent access panel: live MCP endpoint, published surface of 84 tools, session log and a manual call tab" width="606" height="1500" loading="lazy"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section wrap" id="local">
+      <div class="eyebrow">03 / PRIVATE BY DESIGN</div>
+      <div class="sectionhead">
+        <h2>Your media never leaves.<br>The agent comes to you.</h2>
+        <p>Soloman Editor separates the agent from the execution. The model reasons; your machine does the cutting, rendering and streaming.</p>
+      </div>
+      <div class="diagram">
+        <div class="node"><div class="eyebrow">01 / CONTROLLER</div><h3>Your AI agent</h3><p>Claude Desktop, an IDE agent, or any MCP client. It reads resources, calls tools and gets structured results.</p></div>
+        <div class="arrow">↔</div>
+        <div class="node"><div class="eyebrow">02 / TRANSPORT</div><h3>MCP endpoint</h3><p><span class="mono">http://localhost:&lt;port&gt;/mcp</span><br>Streamable HTTP on loopback. 84 tools · 9 resources · 5 prompts, published at initialize.</p></div>
+        <div class="arrow">↔</div>
+        <div class="node"><div class="eyebrow">03 / EXECUTION</div><h3>Soloman Editor</h3><p>Canvas, timeline, exports and streams run on your machine. Projects autosave locally — no cloud render, no upload.</p></div>
+      </div>
+      <p class="architecture-note">Runs in a browser tab or as a desktop app. Stream keys and media stay on the device; the loopback endpoint accepts no remote connections.</p>
+    </section>
+
+    <section class="section wrap" id="surfaces">
+      <div class="sectionhead">
+        <div><div class="eyebrow">04 / THREE SURFACES</div><h2>One engine.<br>Three studios.</h2></div>
+        <p>The same layer engine powers a video editor, a still-image studio and a broadcast desk. Switch from the top bar — your media bin comes with you.</p>
+      </div>
+      <div class="surfaces">
+        <article class="surface">
+          <div class="thumb"><img src="%%SHOT_IMAGE%%" alt="The Image Studio: a single-frame canvas with the asset library and the formatting inspector" width="1600" height="1000" loading="lazy"></div>
+          <div class="body"><div class="eyebrow">01 / IMAGE STUDIO</div><h3>Stills, posters, thumbnails</h3><p>The timeline frozen at one frame. Compose graphics with the same layers, effects and typography, then export a PNG or JPEG at full resolution.</p></div>
+        </article>
+        <article class="surface">
+          <div class="thumb"><img src="%%SHOT_BROADCAST%%" alt="The Broadcast Studio: a timeline stream with RTMP and SRT destinations ticked, ready to go live" width="1600" height="1000" loading="lazy"></div>
+          <div class="body"><div class="eyebrow">02 / BROADCAST</div><h3>Go live from the timeline</h3><p>Push a file, a URL or the composed timeline to RTMP and SRT destinations. Independent streams run at once — YouTube, a second channel, a hardware encoder.</p></div>
+        </article>
+        <article class="surface">
+          <div class="thumb"><img src="%%SHOT_LIBRARY%%" alt="The asset library open on the backgrounds tab, showing bundled copyright-free photography" width="1600" height="1000" loading="lazy"></div>
+          <div class="body"><div class="eyebrow">03 / ASSET LIBRARY</div><h3>Real photography, built in</h3><p>34 copyright-free photographs ship with the editor, plus stock search across Wikimedia, the Met, Pixabay and Pexels — no placeholder art, ever.</p></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap">
+      <div class="banner">
+        <div><div class="eyebrow inverse">YOUR TIMELINE. YOUR MACHINE. YOUR AGENT.</div><h2>Open the studio.<br>Bring your agent.</h2></div>
+        <a class="btn" href="/">Open Soloman Editor ↗</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <div>© <span data-year></span> Soloman Editor. Built for independent computing.</div>
+    <div class="footerlinks"><a href="#features">Features</a><a href="#agent">AI agent</a><a href="#surfaces">Surfaces</a><a href="#local">Local-first</a><a href="https://github.com/kaleemibnanwar/Octopus-AI-Ecosystem" target="_blank" rel="noreferrer">GitHub ↗</a></div>
+  </footer>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var KEY = "soloman-editor-theme";
+      var order = ["system", "light", "dark"];
+      var labels = { system: "◐", light: "☀", dark: "☾" };
+      var saved = null;
+      try { saved = localStorage.getItem(KEY); } catch (e) {}
+      if (order.indexOf(saved) !== -1) root.setAttribute("data-theme", saved);
+      function paint() {
+        var t = root.getAttribute("data-theme") || "system";
+        var el = document.querySelector("[data-theme-label]");
+        if (el) el.textContent = labels[t];
+        var meta = document.querySelector('meta[name="theme-color"]');
+        var dark = t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (meta) meta.setAttribute("content", dark ? "#0b0d11" : "#f8f8f7");
+      }
+      var toggle = document.querySelector("[data-theme-toggle]");
+      if (toggle) toggle.addEventListener("click", function () {
+        var t = root.getAttribute("data-theme") || "system";
+        var next = order[(order.indexOf(t) + 1) % order.length];
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem(KEY, next); } catch (e) {}
+        paint();
+      });
+      paint();
+
+      var menu = document.querySelector("[data-menu]");
+      var mobile = document.querySelector("[data-mobile-nav]");
+      if (menu && mobile) {
+        menu.addEventListener("click", function () {
+          var open = mobile.classList.toggle("open");
+          menu.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+        mobile.addEventListener("click", function (e) {
+          if (e.target.tagName === "A") { mobile.classList.remove("open"); menu.setAttribute("aria-expanded", "false"); }
+        });
+      }
+
+      var year = document.querySelector("[data-year]");
+      if (year) year.textContent = String(new Date().getFullYear());
+    })();
+  </script>
+</body>
+</html>

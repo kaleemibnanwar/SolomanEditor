@@ -1,6 +1,6 @@
 {
   "name": "soloman-editor",
-  "version": "2.6.10",
+  "version": "2.6.11",
   "description": "A non-destructive video editor that runs on your desktop",
   "homepage": "https://solomaneditor.app",
   "desktopName": "soloman-editor.desktop",

@@ -57,6 +57,7 @@ import { IMPORT_TOOLS } from "@/lib/mcp/importTools";
 import { MACRO_TOOLS } from "@/lib/mcp/macroTools";
 import { MANIFEST_TOOLS } from "@/lib/mcp/manifest";
 import { PROJECT_TOOLS } from "@/lib/mcp/projectTools";
+import { TEMPLATE_TOOLS } from "@/lib/mcp/templateTools";
 import {
   ANIMATABLE,
   EASINGS,
@@ -1412,7 +1413,7 @@ const CONTROL_TOOLS: ToolDefinition[] = [
  * Exports
  * ------------------------------------------------------------------ */
 
-export { OBSERVE_TOOLS, CONTROL_TOOLS, IMPORT_TOOLS, PROJECT_TOOLS, CONTENT_TOOLS, FLOWS, MACRO_TOOLS, MANIFEST_TOOLS, BROADCAST_TOOLS };
+export { OBSERVE_TOOLS, CONTROL_TOOLS, IMPORT_TOOLS, PROJECT_TOOLS, TEMPLATE_TOOLS, CONTENT_TOOLS, FLOWS, MACRO_TOOLS, MANIFEST_TOOLS, BROADCAST_TOOLS };
 
 /**
  * Observe first, then control, then import (how the agent's own media enters),
@@ -1429,6 +1430,7 @@ export const TOOLS: ToolDefinition[] = [
   ...CONTROL_TOOLS,
   ...IMPORT_TOOLS,
   ...PROJECT_TOOLS,
+  ...TEMPLATE_TOOLS,
   ...CONTENT_TOOLS,
   ...FLOWS,
   ...MACRO_TOOLS,

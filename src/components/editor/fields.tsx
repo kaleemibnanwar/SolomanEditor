@@ -4,9 +4,21 @@
  * All of them share one behaviour: continuous controls (sliders, colours) push a
  * single history entry per gesture, so a drag is one undo step rather than a
  * hundred. `useHistoryGesture` is what makes that happen.
+ *
+ * The input methods follow the editor conventions:
+ *   · number labels are SCRUBBABLE — drag them sideways to adjust, Shift for
+ *     fine steps, and the field itself takes typed values and arrow keys;
+ *   · slider readouts are clickable — type an exact value, or double-click to
+ *     snap back to the control's default;
+ *   · colour fields carry a swatch palette beside the picker and hex input;
+ *   · selects are styled popovers, not native dropdowns, so long lists (fonts,
+ *     blend modes, effect kinds) stay readable in the dark panel.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Palette } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { editor } from "@/store/editorStore";
@@ -86,6 +98,15 @@ export function Row({ label, children, hint }: { label?: string; children: React
 const inputClass =
   "h-7 rounded border-km-border bg-km-track px-2 text-[12px] text-km-text placeholder:text-km-faint focus-visible:ring-1 focus-visible:ring-km-accent";
 
+const clampTo = (value: number, min?: number, max?: number) =>
+  Math.min(max ?? Infinity, Math.max(min ?? -Infinity, value));
+
+/**
+ * A number field with three input methods: type it, arrow-key it, or SCRUB the
+ * label sideways. The scrub accumulates from the value at pointer-down (not
+ * from the rendered one, which lags a frame behind), and Shift drops to tenth
+ * steps for precision work.
+ */
 export function NumberField({
   label,
   value,
@@ -114,8 +135,61 @@ export function NumberField({
   const [draft, setDraft] = useState<string | null>(null);
   const display = draft ?? (Number.isFinite(value) ? String(Math.round(value * 1000) / 1000) : "0");
 
+  const gesture = useHistoryGesture();
+  const scrub = useRef<{ pointerId: number; lastX: number; current: number } | null>(null);
+
+  const scrubStart = (e: React.PointerEvent<HTMLSpanElement>) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    scrub.current = { pointerId: e.pointerId, lastX: e.clientX, current: value };
+    gesture.begin();
+  };
+
+  const scrubMove = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const state = scrub.current;
+    if (!state || state.pointerId !== e.pointerId) return;
+    const dx = e.clientX - state.lastX;
+    state.lastX = e.clientX;
+    state.current = clampTo(state.current + dx * step * (e.shiftKey ? 0.1 : 1), min, max);
+    onChange(Math.round(state.current * 1000) / 1000);
+  };
+
+  const scrubEnd = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const state = scrub.current;
+    if (!state || state.pointerId !== e.pointerId) return;
+    scrub.current = null;
+    gesture.end();
+    onCommit?.(state.current);
+  };
+
+  const nudge = (direction: 1 | -1, coarse: boolean) => {
+    const next = clampTo(value + direction * step * (coarse ? 10 : 1), min, max);
+    const rounded = Math.round(next * 1000) / 1000;
+    setDraft(null);
+    onChange(rounded);
+    onCommit?.(rounded);
+  };
+
   return (
-    <Row label={label}>
+    <div className={cn("block", disabled && "opacity-45")}>
+      {label && (
+        <div className="mb-1 flex items-baseline justify-between">
+          <span
+            title="Drag sideways to adjust · Shift for fine steps"
+            onPointerDown={scrubStart}
+            onPointerMove={scrubMove}
+            onPointerUp={scrubEnd}
+            onPointerCancel={scrubEnd}
+            className={cn(
+              "select-none text-[11px] text-km-dim",
+              !disabled && "cursor-ew-resize decoration-km-faint/60 decoration-dotted underline-offset-2 hover:underline",
+            )}
+          >
+            {label}
+          </span>
+        </div>
+      )}
       <div className="relative">
         <Input
           type="text"
@@ -127,17 +201,24 @@ export function NumberField({
             const text = e.target.value.trim();
             if (text === "") return;
             const next = Number(text);
-            if (Number.isFinite(next)) onChange(next);
+            if (Number.isFinite(next)) onChange(clampTo(next, min, max));
           }}
           onBlur={() => {
             const text = (draft ?? "").trim();
             const next = Number(text);
-            if (text !== "" && Number.isFinite(next)) onCommit?.(next);
+            if (text !== "" && Number.isFinite(next)) onCommit?.(clampTo(next, min, max));
             else onCommit?.(value);
             setDraft(null);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+            else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              nudge(1, e.shiftKey);
+            } else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              nudge(-1, e.shiftKey);
+            }
           }}
           className={cn(inputClass, suffix && "pr-7")}
         />
@@ -147,10 +228,15 @@ export function NumberField({
           </span>
         )}
       </div>
-    </Row>
+    </div>
   );
 }
 
+/**
+ * A slider whose readout is also an input: click the number to type an exact
+ * value, double-click it to snap back to `resetValue` (when given). The drag
+ * itself stays one undo step via the shared gesture.
+ */
 export function SliderField({
   label,
   value,
@@ -161,6 +247,7 @@ export function SliderField({
   onCommit,
   format,
   disabled,
+  resetValue,
 }: {
   label?: string;
   value: number;
@@ -171,16 +258,59 @@ export function SliderField({
   onCommit?: (value: number) => void;
   format?: (value: number) => string;
   disabled?: boolean;
+  /** Double-clicking the readout snaps back to this value. */
+  resetValue?: number;
 }) {
   const gesture = useHistoryGesture();
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commitDraft = () => {
+    if (draft === null) return;
+    const next = Number(draft.trim());
+    if (draft.trim() !== "" && Number.isFinite(next)) {
+      const clamped = clampTo(next, min, max);
+      onChange(clamped);
+      onCommit?.(clamped);
+    }
+    setDraft(null);
+  };
+
+  const reset = () => {
+    if (resetValue === undefined || disabled) return;
+    setDraft(null);
+    onChange(resetValue);
+    onCommit?.(resetValue);
+  };
 
   return (
     <div className={cn(disabled && "opacity-45")}>
       <div className="mb-1 flex items-baseline justify-between">
         {label && <span className="text-[11px] text-km-dim">{label}</span>}
-        <span className="font-mono text-[10.5px] text-km-faint">
-          {format ? format(value) : Math.round(value * 100) / 100}
-        </span>
+        {draft !== null ? (
+          <input
+            autoFocus
+            value={draft}
+            inputMode="decimal"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitDraft}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitDraft();
+              if (e.key === "Escape") setDraft(null);
+            }}
+            className="h-5 w-16 rounded border border-km-accent bg-km-track px-1 text-right font-mono text-[10.5px] text-km-text outline-none"
+          />
+        ) : (
+          <button
+            type="button"
+            disabled={disabled}
+            title={resetValue !== undefined ? "Click to type a value · double-click to reset" : "Click to type a value"}
+            onClick={() => setDraft(String(Math.round(value * 1000) / 1000))}
+            onDoubleClick={reset}
+            className="rounded px-1 font-mono text-[10.5px] text-km-faint transition hover:bg-km-raised hover:text-km-text"
+          >
+            {format ? format(value) : Math.round(value * 100) / 100}
+          </button>
+        )}
       </div>
       <Slider
         value={[value]}
@@ -202,6 +332,12 @@ export function SliderField({
   );
 }
 
+/** The palette every colour field offers beside its picker — the editor's own vocabulary. */
+const SWATCHES = [
+  "#ffffff", "#0b0b14", "#94a3b8", "#facc15", "#f97316", "#ef4444",
+  "#ec4899", "#a855f7", "#6366f1", "#3b82f6", "#22d3ee", "#22c55e",
+];
+
 export function ColorField({
   label,
   value,
@@ -217,10 +353,17 @@ export function ColorField({
 }) {
   const gesture = useHistoryGesture(400);
   const hex = /^#[0-9a-f]{6}$/i.test(value) ? value : "#ffffff";
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const pick = (color: string) => {
+    onChange(color);
+    onCommit?.(color);
+    setPaletteOpen(false);
+  };
 
   return (
     <Row label={label}>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <input
           type="color"
           value={hex}
@@ -232,7 +375,7 @@ export function ColorField({
             gesture.end();
             onCommit?.(e.target.value);
           }}
-          className="h-7 w-9 cursor-pointer rounded border border-km-border bg-km-track p-0.5"
+          className="h-7 w-9 shrink-0 cursor-pointer rounded border border-km-border bg-km-track p-0.5"
         />
         <Input
           value={value}
@@ -244,8 +387,45 @@ export function ColorField({
             gesture.end();
             onCommit?.(e.target.value);
           }}
-          className={cn(inputClass, "flex-1 font-mono text-[11px]")}
+          className={cn(inputClass, "min-w-0 flex-1 font-mono text-[11px]")}
         />
+        <Popover open={paletteOpen} onOpenChange={setPaletteOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              title="Pick from the palette"
+              className="grid h-7 w-7 shrink-0 place-items-center rounded border border-km-border text-km-faint transition hover:bg-km-raised hover:text-km-text"
+            >
+              <Palette className="h-3.5 w-3.5" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-[196px] border-km-border bg-km-panel p-2">
+            <div className="grid grid-cols-6 gap-1.5">
+              {SWATCHES.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  title={color}
+                  onClick={() => pick(color)}
+                  className={cn(
+                    "h-6 w-6 rounded border transition hover:scale-110",
+                    value.toLowerCase() === color ? "border-km-accent ring-1 ring-km-accent" : "border-km-border",
+                  )}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
+            {allowClear && (
+              <button
+                type="button"
+                onClick={() => pick("transparent")}
+                className="mt-2 w-full rounded border border-km-border px-2 py-1 text-[10.5px] text-km-dim transition hover:bg-km-raised hover:text-km-text"
+              >
+                Clear (transparent)
+              </button>
+            )}
+          </PopoverContent>
+        </Popover>
         {allowClear && (
           <button
             type="button"
@@ -254,7 +434,7 @@ export function ColorField({
               onChange("transparent");
               onCommit?.("transparent");
             }}
-            className="h-7 rounded border border-km-border px-2 text-[10px] text-km-dim transition hover:bg-km-raised hover:text-km-text"
+            className="h-7 shrink-0 rounded border border-km-border px-2 text-[10px] text-km-dim transition hover:bg-km-raised hover:text-km-text"
           >
             Clear
           </button>
@@ -269,25 +449,39 @@ export function SelectField<T extends string>({
   value,
   options,
   onChange,
+  optionStyle,
 }: {
   label?: string;
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
+  /** Per-option styling — e.g. rendering each font in its own face. */
+  optionStyle?: (value: T) => CSSProperties | undefined;
 }) {
+  const selected = options.find((o) => o.value === value);
+
   return (
     <Row label={label}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="h-7 w-full rounded border border-km-border bg-km-track px-2 text-[12px] text-km-text outline-none focus:ring-1 focus:ring-km-accent"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value} className="bg-km-panel2">
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <Select value={value} onValueChange={(next) => onChange(next as T)}>
+        <SelectTrigger
+          className="h-7 w-full rounded border-km-border bg-km-track px-2 text-[12px] text-km-text focus:ring-1 focus:ring-km-accent [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:text-km-faint"
+          style={optionStyle?.(value)}
+        >
+          <SelectValue>{selected?.label ?? value}</SelectValue>
+        </SelectTrigger>
+        <SelectContent className="max-h-64 border-km-border bg-km-panel2 text-km-text">
+          {options.map((o) => (
+            <SelectItem
+              key={o.value}
+              value={o.value}
+              style={optionStyle?.(o.value)}
+              className="text-[12px] text-km-dim focus:bg-km-raised focus:text-km-text"
+            >
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </Row>
   );
 }

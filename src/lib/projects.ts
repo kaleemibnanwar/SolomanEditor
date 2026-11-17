@@ -26,15 +26,8 @@ import { drawFrame } from "@/lib/compositor";
 import { assetMetaPatch, loadAudioMeta, loadImageMeta, loadVideoMeta } from "@/lib/media";
 import { layerEnd, orderedLayers, projectDuration } from "@/lib/project";
 import { ASSET_STORE, PROJECT_STORE, storeDelete, storeGet, storeGetAll, storePut } from "@/lib/storage";
-import { applySnapshotSlots, getUserTemplate, instantiateSnapshot } from "@/lib/userTemplates";
-import {
-  buildTemplateProject,
-  templateById,
-  type BuildTemplateOptions,
-  type BuiltProject,
-  type ProjectTemplate,
-} from "@/lib/templates";
 import { uid } from "@/lib/time";
+import { applySnapshotSlots, getUserTemplate, instantiateSnapshot } from "@/lib/userTemplates";
 import { DEFAULT_SETTINGS, createEmptyProject, editor, editorStore } from "@/store/editorStore";
 import type { Asset, AssetId, AssetProvenance, ExportJob, MediaKind, Project } from "@/types/editor";
 
@@ -428,26 +421,6 @@ async function collectGarbage(): Promise<void> {
  * ------------------------------------------------------------------ */
 
 /**
- * Lays a template down as the live project AND saves it, so it appears in the
- * library straight away as `processing` rather than only existing in memory
- * until the first edit. Pending work is flushed first, for the same reason
- * `openProject` does it.
- */
-export async function createFromTemplate(
-  template: string | ProjectTemplate,
-  options: BuildTemplateOptions = {},
-): Promise<{ record: ProjectRecord | null; built: BuiltProject } | null> {
-  const spec = typeof template === "string" ? templateById(template) : template;
-  if (!spec) return null;
-  await flushAutosave();
-  const built = await buildTemplateProject(spec, options);
-  editor().loadProject(built.project, built.assets);
-  editor().setCurrentTime(0);
-  const record = await saveProject({ capturePoster: true, templateId: spec.id });
-  return { record, built };
-}
-
-/**
  * Starts a blank project on a fresh id, so it becomes its own library record
  * rather than overwriting whatever was there before. The canvas carries over —
  * a portrait project is a standing choice, not a property of the last edit.
@@ -459,9 +432,10 @@ export function newProject(name = "Untitled project"): void {
 }
 
 /**
- * Opens a saved snapshot template as the live project, exactly as
- * `createFromTemplate` opens a recipe: the snapshot is instantiated with fresh
- * ids, loaded, and saved so it joins the library immediately.
+ * Opens a saved snapshot template as a fresh project: new ids everywhere, the
+ * caller's slot values applied, then saved so it joins the library as its own
+ * record. Like `openProject`, this REPLACES what is open — the outgoing project
+ * is flushed to the library first so nothing is lost in the swap.
  */
 export async function loadSnapshotTemplate(
   idOrName: string,

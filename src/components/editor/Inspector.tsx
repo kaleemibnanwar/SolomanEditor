@@ -12,6 +12,9 @@
  */
 import { useMemo, useState } from "react";
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   ArrowRight,
   ChevronDown,
   ClipboardCopy,
@@ -57,9 +60,9 @@ import {
   type Junction,
 } from "@/lib/bonds";
 import { evaluatedBox } from "@/lib/geometry";
-import { FILTER_LOOKS, lookMatches } from "@/lib/library";
+import { FILTER_LOOKS, SHAPE_PRESETS, lookMatches } from "@/lib/library";
 import { LAYER_COLORS, LAYER_LABELS } from "@/lib/project";
-import { transitionPreviewDataUrl } from "@/lib/preview";
+import { shapePreviewDataUrl, transitionPreviewDataUrl } from "@/lib/preview";
 import { clamp, formatTimecode } from "@/lib/time";
 import {
   TRANSITION_CATEGORIES,
@@ -75,10 +78,12 @@ import type {
   BlendMode,
   Easing,
   EditorState,
+  EffectKind,
   EffectStyle,
   Keyframe,
   Layer,
   LayerFilters,
+  LayerGrade,
   StickerStyle,
   TextStyle,
   Transition,
@@ -123,15 +128,21 @@ export default function Inspector() {
  * Single layer
  * ------------------------------------------------------------------ */
 
-const TAB_META: { value: InspectorTab; label: string; show: (layer: Layer) => boolean }[] = [
-  { value: "transform", label: "Transform", show: () => true },
-  { value: "filters", label: "Filters", show: (l) => l.type !== "audio" },
-  { value: "text", label: "Text", show: (l) => l.type === "text" },
-  { value: "sticker", label: "Shape", show: (l) => l.type === "sticker" },
-  { value: "transition", label: "Transition", show: () => true },
-  { value: "audio", label: "Sound", show: (l) => l.type === "audio" || l.type === "video" },
-  { value: "effect", label: "Effect", show: (l) => l.type === "effect" },
-  { value: "keyframes", label: "Keys", show: () => true },
+/**
+ * Which tabs a layer gets, and what they are called. The panel is specific to
+ * the kind of thing selected: an audio clip has no transform to speak of (its
+ * tab is timing only) and no visual transition; a shape layer's tab is named
+ * for what it actually carries — a vector shape or an emoji glyph.
+ */
+const TAB_META: { value: InspectorTab; label: (layer: Layer) => string; show: (layer: Layer) => boolean }[] = [
+  { value: "transform", label: (l) => (l.type === "audio" ? "Timing" : "Transform"), show: () => true },
+  { value: "filters", label: () => "Filters", show: (l) => l.type !== "audio" },
+  { value: "text", label: () => "Text", show: (l) => l.type === "text" },
+  { value: "sticker", label: (l) => (l.sticker?.shape ? "Shape" : "Sticker"), show: (l) => l.type === "sticker" },
+  { value: "transition", label: () => "Transition", show: (l) => l.type !== "audio" },
+  { value: "audio", label: () => "Sound", show: (l) => l.type === "audio" || l.type === "video" },
+  { value: "effect", label: () => "Effect", show: (l) => l.type === "effect" },
+  { value: "keyframes", label: () => "Keys", show: () => true },
 ];
 
 function SingleLayer({ layer }: { layer: Layer }) {
@@ -156,7 +167,7 @@ function SingleLayer({ layer }: { layer: Layer }) {
                 : "bg-km-panel2 text-km-dim hover:bg-km-raised hover:text-km-text",
             )}
           >
-            {t.label}
+            {t.label(layer)}
           </button>
         ))}
       </div>
@@ -244,9 +255,6 @@ function TransformPanel({ layer }: { layer: Layer }) {
   const currentTime = useEditor((s) => s.currentTime);
   const gesture = useHistoryGesture();
 
-  const asset = layer.assetId ? assets[layer.assetId] : undefined;
-  const hasSource = layer.type === "video" || layer.type === "audio";
-
   /** Number inputs commit live but only bank one history entry per run of edits. */
   const num = (apply: (v: number) => void) => ({
     onChange: (v: number) => {
@@ -287,6 +295,10 @@ function TransformPanel({ layer }: { layer: Layer }) {
   };
 
   const fitDisabled = scaleAnimated && posAnimated;
+
+  // An audio clip draws nothing, so position, size and opacity would be dead
+  // controls — its transform tab is the timing sheet alone.
+  if (layer.type === "audio") return <TimingSection layer={layer} />;
 
   return (
     <>
@@ -336,6 +348,7 @@ function TransformPanel({ layer }: { layer: Layer }) {
           max={8}
           step={0.01}
           format={(v) => `${v.toFixed(2)}×`}
+          resetValue={1}
           onChange={(v) => setT({ scale: v })}
         />
         <SliderField
@@ -345,6 +358,7 @@ function TransformPanel({ layer }: { layer: Layer }) {
           max={180}
           step={1}
           format={(v) => `${Math.round(v)}°`}
+          resetValue={0}
           onChange={(v) => setT({ rotation: v })}
         />
         <div className="grid grid-cols-3 gap-2">
@@ -392,6 +406,7 @@ function TransformPanel({ layer }: { layer: Layer }) {
           max={1}
           step={0.01}
           format={(v) => `${Math.round(v * 100)}%`}
+          resetValue={1}
           onChange={(v) => editor().updateLayer(layer.id, { opacity: v }, false)}
         />
         {layer.keyframes.some((k) => k.prop === "opacity") && (
@@ -401,66 +416,91 @@ function TransformPanel({ layer }: { layer: Layer }) {
         )}
       </Section>
 
-      <Section title="Timing">
-        <div className="grid grid-cols-2 gap-2">
-          <NumberField
-            label="Start"
-            value={layer.startTime}
-            min={0}
-            step={0.05}
-            suffix="s"
-            {...num((v) => editor().setLayerStart(layer.id, v, false))}
-          />
-          <NumberField
-            label="Duration"
-            value={layer.duration}
-            min={0.08}
-            step={0.05}
-            suffix="s"
-            {...num((v) => editor().trimEnd(layer.id, layer.startTime + v, false))}
-          />
-        </div>
-
-        {hasSource && (
-          <NumberField
-            label={`Source in-point${asset?.duration ? ` · ${asset.duration.toFixed(1)}s long` : ""}`}
-            value={layer.inPoint}
-            min={0}
-            step={0.05}
-            suffix="s"
-            {...num((v) =>
-              editor().updateLayer(
-                layer.id,
-                { inPoint: clamp(v, 0, Math.max(0, (asset?.duration ?? v) - 0.05)) },
-                false,
-              ),
-            )}
-          />
-        )}
-
-        <div className="flex gap-1.5">
-          <SmallButton
-            title="Move the clip start to the playhead"
-            onClick={() => editor().setLayerStart(layer.id, Math.max(0, currentTime))}
-          >
-            Start at playhead
-          </SmallButton>
-          <SmallButton
-            title="Trim the clip end to the playhead"
-            onClick={() => editor().trimEnd(layer.id, Math.max(layer.startTime + 0.08, currentTime))}
-          >
-            End at playhead
-          </SmallButton>
-        </div>
-
-        <div className="flex items-center justify-between text-[10px] text-km-faint">
-          <span>
-            {formatTimecode(layer.startTime)} → {formatTimecode(layerEnd(layer))}
-          </span>
-          <span>{`${layer.duration.toFixed(2)}s visible`}</span>
-        </div>
-      </Section>
+      <TimingSection layer={layer} />
     </>
+  );
+}
+
+/**
+ * The timing sheet — start, duration, source in-point and playhead trims.
+ * Shared by every layer type; for audio it is the whole transform tab.
+ */
+function TimingSection({ layer }: { layer: Layer }) {
+  const assets = useEditor((s) => s.assets);
+  const currentTime = useEditor((s) => s.currentTime);
+  const gesture = useHistoryGesture();
+
+  const asset = layer.assetId ? assets[layer.assetId] : undefined;
+  const hasSource = layer.type === "video" || layer.type === "audio";
+
+  const num = (apply: (v: number) => void) => ({
+    onChange: (v: number) => {
+      gesture.begin();
+      apply(v);
+    },
+    onCommit: () => gesture.end(),
+  });
+
+  return (
+    <Section title="Timing" className="border-b-0">
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField
+          label="Start"
+          value={layer.startTime}
+          min={0}
+          step={0.05}
+          suffix="s"
+          {...num((v) => editor().setLayerStart(layer.id, v, false))}
+        />
+        <NumberField
+          label="Duration"
+          value={layer.duration}
+          min={0.08}
+          step={0.05}
+          suffix="s"
+          {...num((v) => editor().trimEnd(layer.id, layer.startTime + v, false))}
+        />
+      </div>
+
+      {hasSource && (
+        <NumberField
+          label={`Source in-point${asset?.duration ? ` · ${asset.duration.toFixed(1)}s long` : ""}`}
+          value={layer.inPoint}
+          min={0}
+          step={0.05}
+          suffix="s"
+          {...num((v) =>
+            editor().updateLayer(
+              layer.id,
+              { inPoint: clamp(v, 0, Math.max(0, (asset?.duration ?? v) - 0.05)) },
+              false,
+            ),
+          )}
+        />
+      )}
+
+      <div className="flex gap-1.5">
+        <SmallButton
+          title="Move the clip start to the playhead"
+          onClick={() => editor().setLayerStart(layer.id, Math.max(0, currentTime))}
+        >
+          Start at playhead
+        </SmallButton>
+        <SmallButton
+          title="Trim the clip end to the playhead"
+          onClick={() => editor().trimEnd(layer.id, Math.max(layer.startTime + 0.08, currentTime))}
+        >
+          End at playhead
+        </SmallButton>
+      </div>
+
+      <div className="flex items-center justify-between text-[10px] text-km-faint">
+        <span>
+          {formatTimecode(layer.startTime)} → {formatTimecode(layerEnd(layer))}
+        </span>
+        <span>{`${layer.duration.toFixed(2)}s ${layer.type === "audio" ? "audible" : "visible"}`}</span>
+      </div>
+    </Section>
   );
 }
 
@@ -470,7 +510,9 @@ function TransformPanel({ layer }: { layer: Layer }) {
 
 function FiltersPanel({ layer }: { layer: Layer }) {
   const f = layer.filters;
+  const g = layer.grade;
   const set = (patch: Partial<LayerFilters>) => editor().updateLayerFilters(layer.id, patch, false);
+  const setGrade = (patch: Partial<LayerGrade>) => editor().updateLayer(layer.id, { grade: { ...g, ...patch } }, false);
   // A look carries both the canvas filter chain and the grade, so the selected
   // state has to compare both — a half-applied look must not read as active.
   const active = FILTER_LOOKS.find((look) => lookMatches(look, layer.filters, layer.grade))?.id;
@@ -570,13 +612,78 @@ function FiltersPanel({ layer }: { layer: Layer }) {
           max={1}
           step={0.01}
           format={(v) => `${Math.round(v * 100)}%`}
+          resetValue={0}
           onChange={(v) => set({ sepia: v })}
+        />
+        <SliderField
+          label="Invert"
+          value={f.invert}
+          min={0}
+          max={1}
+          step={0.01}
+          format={(v) => `${Math.round(v * 100)}%`}
+          resetValue={0}
+          onChange={(v) => set({ invert: v })}
+        />
+      </Section>
+
+      <Section title="Grade">
+        <SliderField
+          label="Temperature"
+          value={g.temperature}
+          min={-1}
+          max={1}
+          step={0.01}
+          format={(v) => (v === 0 ? "neutral" : v > 0 ? `warm ${Math.round(v * 100)}%` : `cool ${Math.round(-v * 100)}%`)}
+          resetValue={0}
+          onChange={(v) => setGrade({ temperature: v })}
+        />
+        <SliderField
+          label="Tint"
+          value={g.tint}
+          min={-1}
+          max={1}
+          step={0.01}
+          format={(v) => (v === 0 ? "neutral" : v > 0 ? `magenta ${Math.round(v * 100)}%` : `green ${Math.round(-v * 100)}%`)}
+          resetValue={0}
+          onChange={(v) => setGrade({ tint: v })}
+        />
+        <SliderField
+          label="Fade"
+          value={g.fade}
+          min={0}
+          max={1}
+          step={0.01}
+          format={(v) => `${Math.round(v * 100)}%`}
+          resetValue={0}
+          onChange={(v) => setGrade({ fade: v })}
+        />
+        <SliderField
+          label="Vignette"
+          value={g.vignette}
+          min={0}
+          max={1}
+          step={0.01}
+          format={(v) => `${Math.round(v * 100)}%`}
+          resetValue={0}
+          onChange={(v) => setGrade({ vignette: v })}
+        />
+        <SliderField
+          label="Grain"
+          value={g.grain}
+          min={0}
+          max={1}
+          step={0.01}
+          format={(v) => `${Math.round(v * 100)}%`}
+          resetValue={0}
+          onChange={(v) => setGrade({ grain: v })}
         />
       </Section>
 
       <Section className="border-b-0">
         <p className="text-[10.5px] leading-relaxed text-km-faint">
-          Filters are baked into the preview and into the exported frames through the same canvas filter chain.
+          Filters are baked into the preview and into the exported frames through the same canvas filter chain; the grade
+          is drawn over the layer box, so both survive export exactly as shown.
         </p>
       </Section>
     </>
@@ -598,9 +705,10 @@ const FONTS = [
 
 function StickerPanel({ layer }: { layer: Layer }) {
   const sticker = layer.sticker;
+  const gesture = useHistoryGesture(800);
 
   if (!sticker) {
-    return <EmptyHint>This layer is not a shape.</EmptyHint>;
+    return <EmptyHint>This layer carries no sticker. Add a shape or an emoji from the left panel.</EmptyHint>;
   }
 
   const setSticker = (patch: Partial<StickerStyle>, record = false) =>
@@ -608,27 +716,74 @@ function StickerPanel({ layer }: { layer: Layer }) {
 
   return (
     <>
-      <Section title="Appearance">
+      {sticker.shape ? (
+        <Section title="Shape">
+          <div className="grid grid-cols-4 gap-1.5">
+            {SHAPE_PRESETS.map((shape) => (
+              <button
+                key={shape.id}
+                type="button"
+                title={shape.label}
+                onClick={() => setSticker({ shape: shape.id }, true)}
+                className={cn(
+                  "overflow-hidden rounded border transition",
+                  sticker.shape === shape.id
+                    ? "border-km-accent bg-km-accent/15"
+                    : "border-km-border bg-km-track hover:bg-km-raised",
+                )}
+              >
+                <PreviewImage cacheKey={`shape:${shape.id}`} factory={() => shapePreviewDataUrl(shape.id)} />
+                <span className="block truncate px-0.5 pb-0.5 text-center text-[8.5px] text-km-dim">{shape.label}</span>
+              </button>
+            ))}
+          </div>
+        </Section>
+      ) : (
+        <Section title="Glyph">
+          <Input
+            value={sticker.glyph ?? ""}
+            placeholder="Type an emoji or character…"
+            onChange={(e) => {
+              gesture.begin();
+              setSticker({ glyph: e.target.value });
+            }}
+            onBlur={() => gesture.end()}
+            className="h-9 border-km-border bg-km-track text-center text-[20px] focus-visible:ring-1 focus-visible:ring-km-accent"
+          />
+          <p className="text-[10px] leading-relaxed text-km-faint">
+            Any emoji or character works. Scale it on the canvas or in Transform; the fill colour applies to plain
+            characters, while emoji keep their own colours.
+          </p>
+        </Section>
+      )}
+
+      <Section title="Appearance" className="border-b-0">
         <ColorField label="Fill color" value={sticker.fill} onChange={(v) => setSticker({ fill: v })} />
-        <ColorField label="Stroke color" value={sticker.stroke} onChange={(v) => setSticker({ stroke: v })} />
-        <SliderField
-          label="Stroke width"
-          value={sticker.strokeWidth}
-          min={0}
-          max={40}
-          step={1}
-          format={(v) => `${Math.round(v)}px`}
-          onChange={(v) => setSticker({ strokeWidth: v })}
-        />
-        <SliderField
-          label="Inner depth"
-          value={sticker.depth}
-          min={0}
-          max={1}
-          step={0.01}
-          format={(v) => `${Math.round(v * 100)}%`}
-          onChange={(v) => setSticker({ depth: v })}
-        />
+        {sticker.shape && (
+          <>
+            <ColorField label="Stroke color" value={sticker.stroke} onChange={(v) => setSticker({ stroke: v })} />
+            <SliderField
+              label="Stroke width"
+              value={sticker.strokeWidth}
+              min={0}
+              max={40}
+              step={1}
+              format={(v) => `${Math.round(v)}px`}
+              resetValue={0}
+              onChange={(v) => setSticker({ strokeWidth: v })}
+            />
+            <SliderField
+              label="Inner depth"
+              value={sticker.depth}
+              min={0}
+              max={1}
+              step={0.01}
+              format={(v) => `${Math.round(v * 100)}%`}
+              resetValue={0}
+              onChange={(v) => setSticker({ depth: v })}
+            />
+          </>
+        )}
       </Section>
     </>
   );
@@ -662,18 +817,13 @@ function TextPanel({ layer }: { layer: Layer }) {
       </Section>
 
       <Section title="Type">
-        <SelectField 
-          label="Animation" 
-          value={text.animation || "none"} 
-          options={[
-            { value: "none", label: "None" },
-            { value: "typing", label: "Typing" },
-            { value: "marquee", label: "Marquee" },
-            { value: "slideUp", label: "Slide Up" },
-          ]} 
-          onChange={(v) => setText({ animation: v as "none" | "typing" | "marquee" | "slideUp" }, true)} 
+        <SelectField
+          label="Font"
+          value={text.fontFamily}
+          options={FONTS}
+          optionStyle={(value) => ({ fontFamily: value })}
+          onChange={(v) => setText({ fontFamily: v }, true)}
         />
-        <SelectField label="Font" value={text.fontFamily} options={FONTS} onChange={(v) => setText({ fontFamily: v }, true)} />
         <SliderField
           label="Size"
           value={text.fontSize}
@@ -698,9 +848,9 @@ function TextPanel({ layer }: { layer: Layer }) {
           label="Align"
           value={text.align}
           options={[
-            { value: "left", label: "Left" },
-            { value: "center", label: "Center" },
-            { value: "right", label: "Right" },
+            { value: "left", label: <AlignLeft className="h-3.5 w-3.5" />, title: "Align left" },
+            { value: "center", label: <AlignCenter className="h-3.5 w-3.5" />, title: "Align center" },
+            { value: "right", label: <AlignRight className="h-3.5 w-3.5" />, title: "Align right" },
           ]}
           onChange={(v) => setText({ align: v }, true)}
         />
@@ -726,6 +876,19 @@ function TextPanel({ layer }: { layer: Layer }) {
 
       <Section title="Colour">
         <ColorField label="Fill" value={text.color} onChange={(v) => setText({ color: v })} />
+        <SliderField
+          label="Gradient fill"
+          value={text.gradient}
+          min={0}
+          max={1}
+          step={0.01}
+          format={(v) => (v === 0 ? "flat" : `${Math.round(v * 100)}%`)}
+          resetValue={0}
+          onChange={(v) => setText({ gradient: v })}
+        />
+        {text.gradient > 0 && (
+          <ColorField label="Gradient into" value={text.gradientColor} onChange={(v) => setText({ gradientColor: v })} />
+        )}
         <ColorField
           label="Plate"
           value={text.backgroundColor}
@@ -762,9 +925,54 @@ function TextPanel({ layer }: { layer: Layer }) {
         />
       </Section>
 
+      <Section title="Layout">
+        <NumberField
+          label="Box width"
+          value={text.boxWidth ?? 0}
+          min={0}
+          step={10}
+          suffix="px"
+          onChange={(v) => setText({ boxWidth: v > 0 ? v : undefined })}
+          onCommit={(v) => setText({ boxWidth: v > 0 ? v : undefined }, true)}
+        />
+        <SliderField
+          label="Skew"
+          value={text.skew}
+          min={-30}
+          max={30}
+          step={0.5}
+          format={(v) => `${v.toFixed(1)}°`}
+          resetValue={0}
+          onChange={(v) => setText({ skew: v })}
+        />
+        <p className="text-[10px] leading-relaxed text-km-faint">
+          Box width 0 wraps to 92% of the canvas; set a width to force narrower columns. Skew tilts the type for kinetic
+          titles.
+        </p>
+      </Section>
+
+      <Section title="Motion">
+        <SelectField
+          label="Animation"
+          value={text.animation || "none"}
+          options={[
+            { value: "none", label: "None" },
+            { value: "typing", label: "Typing" },
+            { value: "marquee", label: "Marquee" },
+            { value: "slideUp", label: "Slide up" },
+          ]}
+          onChange={(v) => setText({ animation: v as "none" | "typing" | "marquee" | "slideUp" }, true)}
+        />
+        <p className="text-[10px] leading-relaxed text-km-faint">
+          Animation runs over the clip's own time — trim the clip on the timeline to retime it, or keyframe the transform
+          for custom moves.
+        </p>
+      </Section>
+
       <Section className="border-b-0">
         <p className="text-[10.5px] leading-relaxed text-km-faint">
-          Text wraps to 92% of the canvas width. Drag it on the canvas to reposition, or use Transform for exact values.
+          Drag text on the canvas to reposition, or use Transform for exact values. Every style here renders identically
+          in the export.
         </p>
       </Section>
     </>
@@ -1234,6 +1442,7 @@ function AudioPanel({ layer }: { layer: Layer }) {
           max={2}
           step={0.01}
           format={(v) => `${Math.round(v * 100)}%`}
+          resetValue={1}
           onChange={(v) => set({ volume: v })}
         />
         <div className="flex gap-1.5 flex-wrap">
@@ -1289,12 +1498,59 @@ function AudioPanel({ layer }: { layer: Layer }) {
  * Effect
  * ------------------------------------------------------------------ */
 
-const EFFECT_KINDS: { value: "solid" | "gradient" | "vignette" | "glow"; label: string }[] = [
+const EFFECT_KINDS: { value: EffectKind; label: string }[] = [
   { value: "solid", label: "Solid card" },
   { value: "gradient", label: "Gradient wash" },
+  { value: "rail", label: "Brand rail" },
   { value: "vignette", label: "Vignette" },
   { value: "glow", label: "Glow" },
+  { value: "lightLeak", label: "Light leak" },
+  { value: "flares", label: "Lens flares" },
+  { value: "rays", label: "God rays" },
+  { value: "streaks", label: "Streaks" },
+  { value: "prism", label: "Prism" },
+  { value: "bokeh", label: "Bokeh" },
+  { value: "dust", label: "Dust" },
+  { value: "snow", label: "Snowfall" },
+  { value: "confetti", label: "Confetti" },
+  { value: "sparkle", label: "Sparkle" },
+  { value: "grain", label: "Film grain" },
+  { value: "noise", label: "Signal noise" },
+  { value: "scanlines", label: "Scanlines" },
+  { value: "halftone", label: "Halftone" },
+  { value: "grid", label: "Grid" },
 ];
+
+/**
+ * Which parameters each effect kind actually reads (see `lib/effects.ts`).
+ * The panel shows only these, so a control can never promise an effect the
+ * renderer will ignore — the same rule the transition picker follows.
+ */
+const EFFECT_PARAMS: Record<
+  EffectKind,
+  { color2?: boolean; angle?: boolean; amount?: string; scale?: boolean; seed?: boolean }
+> = {
+  solid: {},
+  gradient: { color2: true, angle: true },
+  rail: {},
+  vignette: { amount: "Strength" },
+  grid: { amount: "Density" },
+  halftone: { angle: true, amount: "Falloff", scale: true },
+  prism: { color2: true, angle: true, amount: "Intensity" },
+  glow: { color2: true, amount: "Intensity", scale: true, seed: true },
+  lightLeak: { color2: true, angle: true, amount: "Intensity", seed: true },
+  flares: { color2: true, amount: "Intensity", scale: true, seed: true },
+  rays: { color2: true, amount: "Intensity", scale: true, seed: true },
+  streaks: { amount: "Density", scale: true, seed: true },
+  bokeh: { color2: true, amount: "Density", scale: true, seed: true },
+  dust: { amount: "Density", scale: true, seed: true },
+  snow: { amount: "Density", scale: true, seed: true },
+  confetti: { color2: true, amount: "Density", scale: true, seed: true },
+  sparkle: { color2: true, amount: "Density", scale: true, seed: true },
+  grain: { color2: true, amount: "Strength", scale: true, seed: true },
+  noise: { color2: true, amount: "Strength", scale: true, seed: true },
+  scanlines: { color2: true, amount: "Strength", scale: true, seed: true },
+};
 
 const BLEND_MODES: { value: BlendMode; label: string }[] = [
   { value: "source-over", label: "Normal" },
@@ -1309,31 +1565,90 @@ const BLEND_MODES: { value: BlendMode; label: string }[] = [
 
 function EffectPanel({ layer }: { layer: Layer }) {
   const settings = useEditor((s) => s.project.settings);
+  const gesture = useHistoryGesture();
   const effect = layer.effect;
 
   if (!effect) {
-    return <EmptyHint>This layer carries no effect. Add a gradient, vignette, glow or solid card from the left panel.</EmptyHint>;
+    return <EmptyHint>This layer carries no effect. Add one from the Effect or Overlay tab on the left.</EmptyHint>;
   }
 
-  const set = (patch: Partial<typeof effect>, record = true) =>
+  const set = (patch: Partial<EffectStyle>, record = true) =>
     editor().updateLayer(layer.id, { effect: { ...effect, ...patch } }, record);
+
+  /** Continuous controls write live and let the gesture own the history entry. */
+  const live = (apply: (v: number) => void) => ({
+    onChange: (v: number) => {
+      gesture.begin();
+      apply(v);
+    },
+    onCommit: () => gesture.end(),
+  });
+
+  const params = EFFECT_PARAMS[effect.kind];
 
   return (
     <>
       <Section title="Effect">
         <SelectField label="Kind" value={effect.kind} options={EFFECT_KINDS} onChange={(kind) => set({ kind })} />
         <ColorField label="Primary" value={effect.color} onChange={(v) => set({ color: v }, false)} />
-        <ColorField label="Secondary" value={effect.color2} onChange={(v) => set({ color2: v }, false)} />
-        <SliderField
-          label="Angle"
-          value={effect.angle}
-          min={0}
-          max={360}
-          step={1}
-          format={(v) => `${Math.round(v)}°`}
-          onChange={(v) => set({ angle: v }, false)}
-        />
+        {params.color2 && (
+          <ColorField label="Secondary" value={effect.color2} onChange={(v) => set({ color2: v }, false)} />
+        )}
+        {params.angle && (
+          <SliderField
+            label="Angle"
+            value={effect.angle}
+            min={0}
+            max={360}
+            step={1}
+            format={(v) => `${Math.round(v)}°`}
+            resetValue={0}
+            {...live((v) => set({ angle: v }, false))}
+          />
+        )}
+        {params.amount && (
+          <SliderField
+            label={params.amount}
+            value={effect.amount}
+            min={0}
+            max={1}
+            step={0.01}
+            format={(v) => `${Math.round(v * 100)}%`}
+            resetValue={0.5}
+            {...live((v) => set({ amount: v }, false))}
+          />
+        )}
+        {params.scale && (
+          <SliderField
+            label="Size"
+            value={effect.scale}
+            min={0}
+            max={1}
+            step={0.01}
+            format={(v) => `${Math.round(v * 100)}%`}
+            resetValue={0.5}
+            {...live((v) => set({ scale: v }, false))}
+          />
+        )}
+        {params.seed && (
+          <SliderField
+            label="Variation"
+            value={effect.seed}
+            min={0}
+            max={1}
+            step={0.01}
+            format={(v) => v.toFixed(2)}
+            resetValue={0}
+            {...live((v) => set({ seed: v }, false))}
+          />
+        )}
         <SelectField label="Blend" value={effect.blend} options={BLEND_MODES} onChange={(blend) => set({ blend })} />
+        {params.seed && (
+          <p className="text-[10px] leading-relaxed text-km-faint">
+            Variation shifts the animation phase and the random layout, so two overlays of the same kind never look
+            identical.
+          </p>
+        )}
       </Section>
 
       <Section title="Coverage">
@@ -1376,7 +1691,7 @@ const PROP_META: Record<AnimatableProp, { label: string; step: number }> = {
   volume: { label: "Volume", step: 0.01 },
 };
 
-const PROPS_BASE: AnimatableProp[] = ["opacity", "scale", "rotation", "x", "y"];
+const PROPS_BASE: AnimatableProp[] = ["opacity", "scale", "scaleX", "scaleY", "rotation", "x", "y"];
 
 const EASING_OPTIONS: { value: Easing; label: string }[] = [
   { value: "linear", label: "Linear" },
@@ -1399,7 +1714,8 @@ function KeyframesPanel({ layer }: { layer: Layer }) {
   const toggleKey = (prop: AnimatableProp) => {
     const existing = keyAt(prop);
     if (existing) editor().removeKeyframe(layer.id, existing.id);
-    else editor().addKeyframe(layer.id, prop, undefined, local);
+    // scaleX/scaleY are optional on the transform, so pin the neutral 1 explicitly.
+    else editor().addKeyframe(layer.id, prop, staticPropValue(layer, prop) ?? 1, local);
   };
 
   /** Writes keyframes without its own history entry, so a drag stays one step. */
@@ -1432,7 +1748,7 @@ function KeyframesPanel({ layer }: { layer: Layer }) {
         <div className="space-y-1">
           {props.map((prop) => {
             const has = !!keyAt(prop);
-            const value = staticPropValue(layer, prop);
+            const value = staticPropValue(layer, prop) ?? 1;
             return (
               <button
                 key={prop}
