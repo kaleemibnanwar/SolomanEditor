@@ -1,14 +1,13 @@
-# Build, sign (when credentials are present) and publish a release, then mirror
-# the installers to the source repo. The updater (`electron-updater` in
-# `electron/main.cjs`) reads the `latest*.yml` feed from the PUBLIC repo
-# (kaleemibnanwar/solomaneditor), so electron-builder publishes there; the source repo
-# gets a copy of the installers for archive/backup.
+# Build, sign (when credentials are present) and publish a release. Soloman Editor
+# is open source: this single public repo (kaleemibnanwar/SolomanEditor) holds both
+# the source and the releases. The updater (`electron-updater` in
+# `electron/main.cjs`) reads the `latest*.yml` feed from this repo's GitHub
+# Releases, and electron-builder publishes there using the workflow's GITHUB_TOKEN.
 #
 # Triggered by pushing a `v*` tag (or "Run workflow"). The version comes from
 # `package.json`; bump it *and* tag it together, e.g. `pnpm version 0.1.0`.
 #
-# Secrets:
-#   PUBLIC_REPO_TOKEN  (required)  PAT with `contents: write` on kaleemibnanwar/solomaneditor
+# Secrets (all optional — without them the build still succeeds, just unsigned):
 #   MAC_CSC_LINK / MAC_CSC_KEY_PASSWORD   (optional) base64 .p12 + password (macOS signing)
 #   WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD   (optional) base64 .pfx + password (Windows signing)
 #   APPLE_API_KEY_BASE64 / APPLE_API_KEY_ID / APPLE_API_ISSUER / APPLE_TEAM_ID
@@ -111,15 +110,11 @@ jobs:
           "CSC_LINK=$env:CSC_LINK" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "CSC_KEY_PASSWORD=$env:CSC_KEY_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Build, sign and publish installers (public repo)
+      - name: Build, sign and publish installers
         env:
-          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "PUBLIC_REPO_TOKEN is required to publish updater assets to kaleemibnanwar/solomaneditor" >&2
-            exit 1
-          fi
           if [ "$RUNNER_OS" = "macOS" ]; then
             pnpm exec electron-builder --mac --x64 --arm64 --publish always
           elif [ "$RUNNER_OS" = "Linux" ]; then
@@ -128,18 +123,4 @@ jobs:
             pnpm exec electron-builder --win --x64 --publish always
           fi
 
-      - name: Upload installers to the source repo
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          TAG="${{ github.ref_name }}"
-          if [ -z "$TAG" ] || [ "$TAG" = "main" ]; then
-            TAG="v$(node -p "require('./package.json').version")"
-          fi
-          # `create` is idempotent-ish: the native OS runners race to create the same
-          # release, so ignore the "already exists" failure and just upload.
-          gh release create "$TAG" --repo "${{ github.repository }}" \
-            --title "Soloman Editor $TAG" --notes "Release $TAG" || true
-          find release -maxdepth 1 -type f ! -name 'builder-*' -print0 | \
-            xargs -0 gh release upload "$TAG" --repo "${{ github.repository }}" --clobber
+
